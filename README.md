@@ -1,14 +1,16 @@
-# Database Chatbot with Azure OpenAI
+# Database Chatbot
 
-A natural language interface for querying Azure SQL Database using Azure OpenAI. This project demonstrates how to build a conversational interface that allows users to interact with a database using plain English.
+A natural language to SQL chatbot that allows users to query Azure SQL Database using conversational language. The chatbot provides data analysis, visualizations, and export capabilities.
 
 ## Features
 
-- Natural language to SQL conversion using Azure OpenAI
-- Secure connection to Azure SQL Database
-- Automatic schema detection and query generation
-- Error handling and result formatting
-- Command-line interface for easy interaction
+- Natural language to SQL query conversion
+- Data analysis and insights
+- Automatic visualization generation
+- Multiple export formats (CSV, SQL, Excel, JSON)
+- Conversation context memory
+- Rate limit handling
+- Error recovery
 
 ## Prerequisites
 
@@ -30,9 +32,17 @@ cd database-chatbot
 pip install -r requirements.txt
 ```
 
-3. Configure your environment:
-   - Create a `config.py` file with your Azure OpenAI and database credentials
-   - Ensure you have ODBC Driver 18 for SQL Server installed
+3. Create a `.env` file with your Azure credentials:
+```env
+# Azure SQL Database
+AZURE_SQL_CONNECTION_STRING=your_connection_string
+
+# Azure OpenAI
+AZURE_OPENAI_API_KEY=your_api_key
+AZURE_OPENAI_VERSION=2024-02-15-preview
+AZURE_OPENAI_DEPLOYMENT=your_deployment_name
+AZURE_OPENAI_ENDPOINT=your_endpoint
+```
 
 ## Usage
 
@@ -41,32 +51,68 @@ Run the chatbot:
 python db_chatbot.py
 ```
 
-Example queries:
-- "Show me all employees"
-- "What are the top 5 highest paid employees?"
-- "How many employees are in each department?"
+### Available Commands
 
-## Security
+- `export <format> <query>`: Export results
+  - Formats: csv, sql, excel, json
+- `quit`: Exit the program
 
-- Database credentials are stored in `config.py` (not tracked in git)
-- Azure OpenAI API key is stored securely
-- SQL injection prevention through proper query handling
+### Example Queries
 
-## Project Structure
+- `show me all employees`
+- `what are the top 5 highest paid employees?`
+- `how many employees are in each department?`
+- `group the results by department`
 
-- `db_chatbot.py`: Main chatbot implementation
-- `config.py`: Configuration and credentials (not tracked in git)
-- `requirements.txt`: Python dependencies
-- `.gitignore`: Git ignore rules
+## Features in Detail
+
+### Natural Language Processing
+- Converts natural language queries to SQL
+- Maintains conversation context
+- Handles complex queries and aggregations
+
+### Data Analysis
+- Basic statistics
+- Data type analysis
+- Missing value detection
+- Correlation analysis
+- Outlier detection
+
+### Visualizations
+- Time series analysis
+- Distribution plots
+- Correlation heatmaps
+- Categorical analysis
+- Box plots
+
+### Export Capabilities
+- CSV export with metadata
+- SQL query export
+- Excel export with multiple sheets
+- JSON export with metadata
+
+## Error Handling
+
+The chatbot includes comprehensive error handling for:
+- Rate limiting
+- SQL syntax errors
+- Connection issues
+- Data processing errors
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Azure OpenAI Service
+- Azure SQL Database
+- Python Data Science Stack (pandas, numpy, matplotlib, seaborn) 
