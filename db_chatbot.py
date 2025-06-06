@@ -10,10 +10,11 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from io import StringIO
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import urllib.parse
 import warnings
 import time
+from advanced_queries import NATURAL_LANGUAGE_EXAMPLES
 
 # Load environment variables from .env file
 load_dotenv()
@@ -70,6 +71,7 @@ class ChatMemory:
 
 class DatabaseChatbot:
     def __init__(self, connection_string: str, api_key: str, api_version: str, deployment_name: str, endpoint: str):
+        """Initialize the chatbot with database and OpenAI connections."""
         self.connection_string = connection_string
         self.client = AzureOpenAI(
             api_key=api_key,
@@ -79,58 +81,63 @@ class DatabaseChatbot:
         self.deployment_name = deployment_name
         self.chat_memory = ChatMemory()
         
-    def get_schema_info(self) -> str:
+        # Create SQLAlchemy engine
+        connection_url = f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(connection_string)}"
+        self.engine = create_engine(connection_url)
+        
+        # Test connection
         try:
-            conn = pyodbc.connect(self.connection_string)
-            cursor = conn.cursor()
-            
-            # Get all tables
-            cursor.execute("""
-                SELECT TABLE_NAME 
-                FROM INFORMATION_SCHEMA.TABLES 
-                WHERE TABLE_TYPE = 'BASE TABLE'
-            """)
-            tables = cursor.fetchall()
-            
-            schema_info = []
-            for table in tables:
-                table_name = table[0]
-                
-                # Get columns for each table
-                cursor.execute(f"""
-                    SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
-                    FROM INFORMATION_SCHEMA.COLUMNS
-                    WHERE TABLE_NAME = '{table_name}'
-                    ORDER BY ORDINAL_POSITION
-                """)
-                columns = cursor.fetchall()
-                
-                # Format column information
-                column_info = []
-                for col in columns:
-                    col_name, data_type, max_length = col
-                    if max_length:
-                        col_info = f"{col_name} ({data_type}({max_length}))"
-                    else:
-                        col_info = f"{col_name} ({data_type})"
-                    column_info.append(col_info)
-                
-                # Add table information to schema
-                schema_info.append(f"Table: {table_name}")
-                schema_info.append("Columns:")
-                schema_info.extend([f"  - {col}" for col in column_info])
-                schema_info.append("")
-            
-            return "\n".join(schema_info)
-            
+            with self.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            print("Database Chatbot initialized successfully!\n")
         except Exception as e:
-            return f"Error getting schema: {str(e)}"
-        finally:
-            if 'conn' in locals():
-                conn.close()
+            raise Exception(f"Failed to connect to database: {str(e)}")
+
+    def get_schema_info(self) -> str:
+        """Get database schema information."""
+        try:
+            with self.engine.connect() as conn:
+                # Get table information
+                tables_query = text("""
+                SELECT 
+                    t.name AS table_name,
+                    c.name AS column_name,
+                    ty.name AS data_type,
+                    c.max_length,
+                    c.precision,
+                    c.scale,
+                    c.is_nullable
+                FROM sys.tables t
+                INNER JOIN sys.columns c ON t.object_id = c.object_id
+                INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+                ORDER BY t.name, c.column_id;
+                """)
+                tables_df = pd.read_sql(tables_query, conn)
+                
+                # Format schema information
+                schema_info = []
+                for table in tables_df['table_name'].unique():
+                    table_cols = tables_df[tables_df['table_name'] == table]
+                    cols_info = []
+                    for _, row in table_cols.iterrows():
+                        col_info = f"{row['column_name']} ({row['data_type']})"
+                        if row['is_nullable']:
+                            col_info += " NULL"
+                        cols_info.append(col_info)
+                    schema_info.append(f"Table: {table}\nColumns: {', '.join(cols_info)}")
+                
+                return "\n\n".join(schema_info)
+                
+        except Exception as e:
+            raise Exception(f"Error getting schema info: {str(e)}")
 
     def generate_sql_query(self, query: str) -> str:
         """Generate SQL query from natural language using Azure OpenAI."""
+        # Check if query matches any predefined advanced queries
+        for nl_query, sql_query in NATURAL_LANGUAGE_EXAMPLES.items():
+            if nl_query.lower() in query.lower():
+                return sql_query
+
         max_retries = 3
         retry_delay = 60  # seconds
         
@@ -144,6 +151,9 @@ class DatabaseChatbot:
                 3. Include error handling with BEGIN TRY/END TRY
                 4. Do not include backticks or markdown formatting
                 5. Use proper SQL Server syntax
+
+                Database Schema:
+                {self.get_schema_info()}
 
                 Conversation History:
                 {self.chat_memory.get_formatted_history()}
@@ -192,88 +202,95 @@ END CATCH"""
     def execute_query(self, query: str) -> pd.DataFrame:
         """Execute SQL query and return results as DataFrame."""
         try:
-            # Create SQLAlchemy engine
-            params = urllib.parse.parse_qs(self.connection_string)
-            connection_url = f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(self.connection_string)}"
-            engine = create_engine(connection_url)
-            
-            # Execute query using SQLAlchemy
-            return pd.read_sql(query, engine)
-            
+            return pd.read_sql(text(query), self.engine)
         except Exception as e:
             raise Exception(f"Error executing query: {str(e)}")
 
+    def process_query(self, query: str) -> str:
+        """Process a natural language query and return results."""
+        try:
+            # Generate SQL query
+            sql_query = self.generate_sql_query(query)
+            
+            # Execute query
+            df = self.execute_query(sql_query)
+            
+            # Add to chat memory
+            self.chat_memory.add_message("user", query)
+            self.chat_memory.add_message("assistant", f"Query executed successfully. Found {len(df)} results.")
+            
+            # Analyze data
+            analysis = self.analyze_data(df)
+            
+            # Create visualizations
+            viz_message = self.visualize_data(df, query)
+            
+            # Return results
+            return f"Query Results:\n{df}\n\nAnalysis:\n{analysis}\n\n{viz_message}"
+            
+        except Exception as e:
+            error_message = f"Error processing query: {str(e)}"
+            self.chat_memory.add_message("assistant", error_message)
+            return error_message
+
     def analyze_data(self, df: pd.DataFrame) -> str:
-        """Analyze the data and provide comprehensive insights"""
+        """Analyze data and return insights."""
         try:
             analysis = []
             
             # Basic statistics
             analysis.append("Basic Statistics:")
-            analysis.append(df.describe().to_string())
+            analysis.append(str(df.describe()))
             
             # Data types and missing values
             analysis.append("\nData Types and Missing Values:")
             for col in df.columns:
                 missing = df[col].isnull().sum()
-                dtype = df[col].dtype
-                analysis.append(f"{col}: {dtype} - {missing} missing values")
+                analysis.append(f"{col}: {df[col].dtype} - {missing} missing values")
             
-            # Unique values for categorical columns
-            categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+            # Categorical analysis
+            categorical_cols = df.select_dtypes(include=['object']).columns
             if len(categorical_cols) > 0:
                 analysis.append("\nCategorical Column Analysis:")
                 for col in categorical_cols:
-                    unique_vals = df[col].nunique()
-                    value_counts = df[col].value_counts().head(5)
-                    analysis.append(f"{col}: {unique_vals} unique values")
+                    value_counts = df[col].value_counts()
+                    analysis.append(f"{col}: {len(value_counts)} unique values")
                     analysis.append("Top 5 values:")
-                    analysis.append(value_counts.to_string())
+                    analysis.append(str(value_counts.head()))
             
-            # Numeric column analysis
-            numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+            # Numeric analysis
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
             if len(numeric_cols) > 0:
                 analysis.append("\nNumeric Column Analysis:")
                 for col in numeric_cols:
-                    # Skewness and kurtosis
-                    skew = df[col].skew()
-                    kurt = df[col].kurtosis()
+                    skewness = df[col].skew()
+                    kurtosis = df[col].kurtosis()
                     analysis.append(f"\n{col}:")
-                    analysis.append(f"Skewness: {skew:.2f} (0 is normal, >0 is right-skewed, <0 is left-skewed)")
-                    analysis.append(f"Kurtosis: {kurt:.2f} (0 is normal, >0 is heavy-tailed, <0 is light-tailed)")
+                    analysis.append(f"Skewness: {skewness:.2f} (0 is normal, >0 is right-skewed, <0 is left-skewed)")
+                    analysis.append(f"Kurtosis: {kurtosis:.2f} (0 is normal, >0 is heavy-tailed, <0 is light-tailed)")
                     
-                    # Outliers using IQR method
+                    # Outlier detection
                     Q1 = df[col].quantile(0.25)
                     Q3 = df[col].quantile(0.75)
                     IQR = Q3 - Q1
                     outliers = df[(df[col] < (Q1 - 1.5 * IQR)) | (df[col] > (Q3 + 1.5 * IQR))][col]
                     analysis.append(f"Potential outliers: {len(outliers)} values")
             
-            # Time series analysis
-            date_cols = df.select_dtypes(include=['datetime64']).columns
-            if len(date_cols) > 0:
-                analysis.append("\nTime Series Analysis:")
-                for col in date_cols:
-                    analysis.append(f"\n{col}:")
-                    analysis.append(f"Date range: {df[col].min()} to {df[col].max()}")
-                    analysis.append(f"Total days: {(df[col].max() - df[col].min()).days}")
-            
             # Correlation analysis
             if len(numeric_cols) > 1:
-                analysis.append("\nCorrelation Analysis:")
-                corr_matrix = df[numeric_cols].corr()
-                # Find strong correlations
+                correlation_matrix = df[numeric_cols].corr()
                 strong_correlations = []
                 for i in range(len(numeric_cols)):
                     for j in range(i+1, len(numeric_cols)):
-                        corr = corr_matrix.iloc[i,j]
-                        if abs(corr) > 0.5:  # Only show strong correlations
+                        corr = correlation_matrix.iloc[i,j]
+                        if abs(corr) > 0.5:
                             strong_correlations.append(f"{numeric_cols[i]} and {numeric_cols[j]}: {corr:.2f}")
+                
                 if strong_correlations:
-                    analysis.append("Strong correlations found:")
+                    analysis.append("\nStrong Correlations:")
                     analysis.extend(strong_correlations)
                 else:
-                    analysis.append("No strong correlations found between numeric columns")
+                    analysis.append("\nNo strong correlations found between numeric columns")
             
             return "\n".join(analysis)
             
@@ -381,65 +398,73 @@ END CATCH"""
             return "Error creating visualizations"
 
     def export_data(self, df: pd.DataFrame, format: str = 'csv') -> str:
-        """Export data to various formats with enhanced formatting"""
+        """Export data in various formats with enhanced metadata."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
             if format.lower() == 'csv':
-                filename = f"query_results_{timestamp}.csv"
+                filename = f'query_results_{timestamp}.csv'
                 # Add metadata as comments
-                with open(filename, 'w', newline='') as f:
-                    f.write(f"# Query Results Export\n")
-                    f.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                with open(filename, 'w') as f:
+                    f.write(f"# Generated: {datetime.now()}\n")
                     f.write(f"# Total Rows: {len(df)}\n")
                     f.write(f"# Columns: {', '.join(df.columns)}\n\n")
-                    df.to_csv(f, index=False)
+                df.to_csv(filename, mode='a', index=False)
                 return f"Data exported to {filename}"
                 
             elif format.lower() == 'sql':
-                filename = f"query_{timestamp}.sql"
+                filename = f'query_results_{timestamp}.sql'
                 with open(filename, 'w') as f:
-                    f.write("-- Generated SQL Query\n")
-                    f.write(f"-- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"-- Generated: {datetime.now()}\n")
                     f.write(f"-- Total Rows: {len(df)}\n")
                     f.write(f"-- Columns: {', '.join(df.columns)}\n\n")
-                    f.write(query)
-                return f"SQL query exported to {filename}"
+                    f.write("INSERT INTO query_results (")
+                    f.write(", ".join(df.columns))
+                    f.write(") VALUES\n")
+                    
+                    for i, row in df.iterrows():
+                        values = []
+                        for val in row:
+                            if pd.isna(val):
+                                values.append("NULL")
+                            elif isinstance(val, (int, float)):
+                                values.append(str(val))
+                            else:
+                                values.append(f"'{str(val)}'")
+                        f.write("(" + ", ".join(values) + ")")
+                        if i < len(df) - 1:
+                            f.write(",\n")
+                        else:
+                            f.write(";\n")
+                return f"Data exported to {filename}"
                 
             elif format.lower() == 'excel':
-                filename = f"query_results_{timestamp}.xlsx"
-                with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                filename = f'query_results_{timestamp}.xlsx'
+                with pd.ExcelWriter(filename) as writer:
                     # Main data sheet
                     df.to_excel(writer, sheet_name='Data', index=False)
                     
                     # Summary sheet
                     summary_df = pd.DataFrame({
-                        'Metric': ['Total Rows', 'Columns', 'Generated At'],
-                        'Value': [
-                            len(df),
-                            ', '.join(df.columns),
-                            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        ]
+                        'Metric': ['Total Rows', 'Columns', 'Generated'],
+                        'Value': [len(df), len(df.columns), datetime.now()]
                     })
                     summary_df.to_excel(writer, sheet_name='Summary', index=False)
                     
                     # Statistics sheet for numeric columns
-                    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
-                    if len(numeric_cols) > 0:
-                        stats_df = df[numeric_cols].describe()
-                        stats_df.to_excel(writer, sheet_name='Statistics')
+                    if len(df.select_dtypes(include=[np.number]).columns) > 0:
+                        df.describe().to_excel(writer, sheet_name='Statistics')
                 return f"Data exported to {filename}"
                 
             elif format.lower() == 'json':
-                filename = f"query_results_{timestamp}.json"
-                # Convert DataFrame to dict with metadata
+                filename = f'query_results_{timestamp}.json'
                 export_data = {
-                    "metadata": {
-                        "generated_at": datetime.now().isoformat(),
-                        "total_rows": len(df),
-                        "columns": list(df.columns)
+                    'metadata': {
+                        'generated': str(datetime.now()),
+                        'total_rows': len(df),
+                        'columns': list(df.columns)
                     },
-                    "data": df.to_dict(orient='records')
+                    'data': df.to_dict(orient='records')
                 }
                 with open(filename, 'w') as f:
                     json.dump(export_data, f, indent=2)
@@ -451,104 +476,71 @@ END CATCH"""
         except Exception as e:
             return f"Error exporting data: {str(e)}"
 
-    def process_query(self, user_input: str, export_format: Optional[str] = None) -> str:
-        """Process user query with improved error handling and context management"""
-        try:
-            # Add user message to chat memory
-            self.chat_memory.add_message("user", user_input)
-            
-            # Generate and execute query
-            query = self.generate_sql_query(user_input)
-            df = self.execute_query(query)
-            
-            if df.empty:
-                response = "No data found for your query."
-            else:
-                # Generate analysis and visualization
-                analysis = self.analyze_data(df)
-                visualization = self.visualize_data(df, query)
-                
-                # Format response with query context
-                response = f"Query Results:\n{df.to_string()}\n\nAnalysis:\n{analysis}"
-                if visualization:
-                    response += f"\n\nVisualization saved as: {visualization}"
-                
-                # Export if requested
-                if export_format:
-                    export_result = self.export_data(df, export_format)
-                    response += f"\n\n{export_result}"
-            
-            # Add assistant response to chat memory with metadata
-            self.chat_memory.add_message("assistant", response, {
-                "query": query,
-                "row_count": len(df),
-                "columns": list(df.columns),
-                "has_visualization": bool(visualization),
-                "export_format": export_format
-            })
-            
-            return response
-            
-        except Exception as e:
-            error_msg = f"Error processing query: {str(e)}"
-            self.chat_memory.add_message("assistant", error_msg, {"error": str(e)})
-            return error_msg
-
 def main():
-    try:
-        # Initialize the chatbot
-        chatbot = DatabaseChatbot(
-            connection_string=AZURE_SQL_CONNECTION_STRING,
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version=AZURE_OPENAI_VERSION,
-            deployment_name=AZURE_OPENAI_DEPLOYMENT,
-            endpoint=AZURE_OPENAI_ENDPOINT
-        )
-        
-        print("Database Chatbot initialized successfully!")
-        print("\nAvailable commands:")
-        print("- 'export <format> <query>': Export results")
-        print("  Formats: csv, sql, excel, json")
-        print("- 'quit': Exit the program")
-        print("\nExample queries:")
-        print("- show me all employees")
-        print("- what are the top 5 highest paid employees?")
-        print("- how many employees are in each department?")
-        print("- group the results by department")
-        print("\nThe chatbot will automatically:")
-        print("- Generate appropriate SQL queries")
-        print("- Provide data analysis and insights")
-        print("- Create relevant visualizations")
-        print("- Maintain conversation context")
-        
-        while True:
-            try:
-                user_input = input("\nEnter your question (or 'quit' to exit): ")
-                
-                if user_input.lower() == 'quit':
-                    break
-                
-                # Handle export command
-                export_format = None
-                if user_input.lower().startswith('export '):
-                    parts = user_input.split()
-                    if len(parts) > 1:
-                        export_format = parts[1].lower()
-                        user_input = ' '.join(parts[2:])
-                
-                response = chatbot.process_query(user_input, export_format)
-                print("\n" + response)
-            
-            except KeyboardInterrupt:
-                print("\nOperation cancelled by user.")
-                continue
-            
-            except Exception as e:
-                print(f"\nError: {str(e)}")
-                continue
+    """Main function to run the chatbot."""
+    # Load environment variables
+    load_dotenv()
     
-    except Exception as e:
-        print(f"Error initializing chatbot: {str(e)}")
+    # Get Azure credentials from environment variables
+    connection_string = os.getenv('AZURE_SQL_CONNECTION_STRING')
+    api_key = os.getenv('AZURE_OPENAI_API_KEY')
+    api_version = os.getenv('AZURE_OPENAI_VERSION')
+    deployment_name = os.getenv('AZURE_OPENAI_DEPLOYMENT')
+    endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
+    
+    if not all([connection_string, api_key, api_version, deployment_name, endpoint]):
+        raise ValueError("Missing required environment variables")
+    
+    # Initialize chatbot
+    chatbot = DatabaseChatbot(connection_string, api_key, api_version, deployment_name, endpoint)
+    
+    print("Available commands:")
+    print("- 'export <format> <query>': Export results")
+    print("  Formats: csv, sql, excel, json")
+    print("- 'quit': Exit the program\n")
+    
+    print("Example queries:")
+    print("- show me all employees")
+    print("- what are the top 5 highest paid employees?")
+    print("- how many employees are in each department?")
+    print("- group the results by department")
+    print("- show me project performance metrics")
+    print("- analyze employee performance and contributions")
+    print("- give me department analysis")
+    print("- show me time-based trends")
+    print("- analyze employee skills")
+    print("- show me project success metrics\n")
+    
+    print("The chatbot will automatically:")
+    print("- Generate appropriate SQL queries")
+    print("- Provide data analysis and insights")
+    print("- Create relevant visualizations")
+    print("- Maintain conversation context\n")
+    
+    # Main interaction loop
+    while True:
+        query = input("Enter your question (or 'quit' to exit): ").strip()
+        
+        if query.lower() == 'quit':
+            break
+            
+        if query.lower().startswith('export '):
+            parts = query.split(' ', 2)
+            if len(parts) == 3:
+                format_type = parts[1]
+                actual_query = parts[2]
+                try:
+                    sql_query = chatbot.generate_sql_query(actual_query)
+                    df = chatbot.execute_query(sql_query)
+                    result = chatbot.export_data(df, format_type)
+                    print(result)
+                except Exception as e:
+                    print(f"Error processing export: {str(e)}")
+            else:
+                print("Invalid export command. Use: export <format> <query>")
+        else:
+            result = chatbot.process_query(query)
+            print(result)
 
 if __name__ == "__main__":
     main() 
