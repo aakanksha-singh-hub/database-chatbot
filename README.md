@@ -1,115 +1,133 @@
 # Database Chatbot
 
-A natural language to SQL chatbot that allows users to query Azure SQL Database using conversational language. The chatbot provides data analysis, visualizations, and export capabilities.
+A powerful chatbot interface that allows users to query databases using natural language. Built with React, FastAPI, and Azure OpenAI.
 
 ## Features
 
-- Natural language to SQL query conversion
-- Data analysis and insights
-- Automatic visualization generation
-- Multiple export formats (CSV, SQL, Excel, JSON)
-- Conversation context memory
-- Rate limit handling
-- Error recovery
+### Core Features
+- 🧠 Natural Language to SQL Conversion
+  - Input box for plain language queries
+  - Azure OpenAI-powered query-to-SQL conversion
+  - Real-time execution on Azure SQL Database
+  - Human-readable results display
+  - Shows original query, generated SQL, and results
 
-## Prerequisites
+- 💬 Conversational Follow-up
+  - Maintains context of previous queries
+  - Supports drill-down and refinement
+  - Chat-like interface for multi-turn interaction
 
-- Python 3.8 or higher
+- 📊 Dataset Awareness
+  - Schema preview
+  - Preset query buttons
+  - Export functionality (CSV, Excel, JSON)
+
+### Security Features
+- SQL Injection Prevention
+- Sensitive Data Masking
+- Azure Managed Identity Support
+- Environment Variable Configuration
+
+## Setup
+
+### Prerequisites
+- Python 3.8+
+- Node.js 14+
 - Azure SQL Database
 - Azure OpenAI Service
-- ODBC Driver 18 for SQL Server
 
-## Installation
+### Backend Setup
+1. Create a `.env` file in the root directory with the following variables:
+   ```
+   AZURE_SQL_CONNECTION_STRING=your_connection_string
+   AZURE_OPENAI_API_KEY=your_api_key
+   AZURE_OPENAI_VERSION=2024-02-15-preview
+   AZURE_OPENAI_DEPLOYMENT=your_deployment_name
+   AZURE_OPENAI_ENDPOINT=your_endpoint
+   ```
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/database-chatbot.git
-cd database-chatbot
-```
+2. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Start the FastAPI backend:
+   ```bash
+   python backend.py
+   ```
+
+### Frontend Setup
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
 
 2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   npm install
+   ```
 
-3. Create a `.env` file with your Azure credentials:
-```env
-# Azure SQL Database
-AZURE_SQL_CONNECTION_STRING=your_connection_string
-
-# Azure OpenAI
-AZURE_OPENAI_API_KEY=your_api_key
-AZURE_OPENAI_VERSION=2024-02-15-preview
-AZURE_OPENAI_DEPLOYMENT=your_deployment_name
-AZURE_OPENAI_ENDPOINT=your_endpoint
-```
+3. Start the development server:
+   ```bash
+   npm start
+   ```
 
 ## Usage
 
-Run the chatbot:
-```bash
-python db_chatbot.py
+1. Open your browser to `http://localhost:3000`
+2. View available tables in the schema section
+3. Use preset queries or type your own natural language query
+4. View results, generated SQL, and analysis
+5. Export results in various formats
+
+## Example Queries
+
+- "Show all employees"
+- "Top 5 products by sales"
+- "Sales by month"
+- "List low-stock products"
+- "How many employees joined last year?"
+- "Break down sales by department"
+
+## Security Considerations
+
+- All database credentials are stored in environment variables
+- SQL queries are validated before execution
+- Sensitive data is masked in results
+- CORS is configured for security
+
+## Development
+
+### Project Structure
+```
+.
+├── backend.py           # FastAPI backend
+├── db_chatbot.py       # Core chatbot logic
+├── frontend/           # React frontend
+│   ├── src/
+│   │   ├── App.js     # Main React component
+│   │   └── ...
+│   └── package.json
+├── requirements.txt    # Python dependencies
+└── .env               # Environment variables
 ```
 
-### Available Commands
-
-- `export <format> <query>`: Export results
-  - Formats: csv, sql, excel, json
-- `quit`: Exit the program
-
-### Example Queries
-
-- `show me all employees`
-- `what are the top 5 highest paid employees?`
-- `how many employees are in each department?`
-- `group the results by department`
-
-## Features in Detail
-
-### Natural Language Processing
-- Converts natural language queries to SQL
-- Maintains conversation context
-- Handles complex queries and aggregations
-
-### Data Analysis
-- Basic statistics
-- Data type analysis
-- Missing value detection
-- Correlation analysis
-- Outlier detection
-
-### Visualizations
-- Time series analysis
-- Distribution plots
-- Correlation heatmaps
-- Categorical analysis
-- Box plots
-
-### Export Capabilities
-- CSV export with metadata
-- SQL query export
-- Excel export with multiple sheets
-- JSON export with metadata
-
-## Error Handling
-
-The chatbot includes comprehensive error handling for:
-- Rate limiting
-- SQL syntax errors
-- Connection issues
-- Data processing errors
+### Adding New Features
+1. Backend: Add new endpoints in `backend.py`
+2. Frontend: Create new components in `frontend/src`
+3. Core Logic: Extend `DatabaseChatbot` class in `db_chatbot.py`
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 
