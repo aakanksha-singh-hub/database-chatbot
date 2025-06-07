@@ -15,6 +15,10 @@ import urllib.parse
 import warnings
 import time
 from .advanced_queries import NATURAL_LANGUAGE_EXAMPLES
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import textwrap
 
 # Load environment variables from .env file
 load_dotenv()
@@ -738,11 +742,8 @@ class DatabaseChatbot:
             return f"Error analyzing data: {str(e)}"
 
     def visualize_data(self, df: pd.DataFrame) -> str:
-        """Create focused and meaningful visualizations based on data."""
+        """Create beautiful and interactive visualizations based on data."""
         try:
-            # Set a valid seaborn style
-            sns.set_theme(style="whitegrid")
-            
             # Create timestamp for unique filenames
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             base_filename = f"visualization_{timestamp}"
@@ -754,55 +755,116 @@ class DatabaseChatbot:
             numeric_cols = df.select_dtypes(include=[np.number]).columns
             categorical_cols = df.select_dtypes(include=['object']).columns
             
+            visualizations = []
+            insights = []
+            
             # 1. Department Distribution (if department column exists)
             if 'department' in df.columns:
-                plt.figure(figsize=(10, 6))
-                dept_counts = df['department'].value_counts()
-                plt.pie(dept_counts, labels=dept_counts.index, autopct='%1.1f%%')
-                plt.title('Employee Distribution by Department')
-                plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_department_pie.png')
-                plt.close()
-            
-            # 2. Salary Distribution (if salary column exists)
-            if 'salary' in df.columns:
-                plt.figure(figsize=(12, 6))
-                sns.boxplot(x='department', y='salary', data=df)
-                plt.title('Salary Distribution by Department')
-                plt.xticks(rotation=45)
-                plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_salary_box.png')
-                plt.close()
+                # Create a beautiful pie chart with plotly
+                fig = px.pie(
+                    df, 
+                    names='department',
+                    title='Employee Distribution by Department',
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                fig.update_traces(textposition='inside', textinfo='percent+label')
+                fig.update_layout(
+                    title_x=0.5,
+                    title_font_size=20,
+                    showlegend=True,
+                    legend_title="Departments"
+                )
+                fig.write_html(f'visualizations/{base_filename}_department_pie.html')
+                visualizations.append(f'visualizations/{base_filename}_department_pie.html')
                 
-                # Salary histogram
-                plt.figure(figsize=(10, 6))
-                sns.histplot(data=df, x='salary', bins=10)
-                plt.title('Salary Distribution')
-                plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_salary_hist.png')
-                plt.close()
+                # Add insight
+                dept_counts = df['department'].value_counts()
+                largest_dept = dept_counts.index[0]
+                smallest_dept = dept_counts.index[-1]
+                insights.append(f"• {largest_dept} is the largest department with {dept_counts[largest_dept]} employees")
+                insights.append(f"• {smallest_dept} is the smallest department with {dept_counts[smallest_dept]} employees")
             
-            # 3. Performance Score Analysis (if performance_score exists)
+            # 2. Salary Analysis (if salary column exists)
+            if 'salary' in df.columns:
+                # Create a beautiful box plot
+                fig = px.box(
+                    df,
+                    x='department',
+                    y='salary',
+                    title='Salary Distribution by Department',
+                    color='department',
+                    points='all',
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                fig.update_layout(
+                    title_x=0.5,
+                    title_font_size=20,
+                    xaxis_title="Department",
+                    yaxis_title="Salary",
+                    showlegend=False
+                )
+                fig.write_html(f'visualizations/{base_filename}_salary_box.html')
+                visualizations.append(f'visualizations/{base_filename}_salary_box.html')
+                
+                # Add salary insights
+                avg_salary = df['salary'].mean()
+                max_salary = df['salary'].max()
+                min_salary = df['salary'].min()
+                insights.append(f"• Average salary across all departments: ${avg_salary:,.2f}")
+                insights.append(f"• Salary range: ${min_salary:,.2f} - ${max_salary:,.2f}")
+            
+            # 3. Performance Analysis (if performance_score exists)
             if 'performance_score' in df.columns:
-                plt.figure(figsize=(12, 6))
-                sns.boxplot(x='department', y='performance_score', data=df)
-                plt.title('Performance Score by Department')
-                plt.xticks(rotation=45)
-                plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_performance_box.png')
-                plt.close()
+                # Create a beautiful scatter plot
+                fig = px.scatter(
+                    df,
+                    x='salary',
+                    y='performance_score',
+                    color='department',
+                    title='Performance vs Salary by Department',
+                    size='performance_score',
+                    hover_data=['department'],
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                fig.update_layout(
+                    title_x=0.5,
+                    title_font_size=20,
+                    xaxis_title="Salary",
+                    yaxis_title="Performance Score"
+                )
+                fig.write_html(f'visualizations/{base_filename}_performance_scatter.html')
+                visualizations.append(f'visualizations/{base_filename}_performance_scatter.html')
+                
+                # Add performance insights
+                best_performer = df.loc[df['performance_score'].idxmax()]
+                insights.append(f"• Best performing employee: {best_performer['name']} in {best_performer['department']} with score {best_performer['performance_score']}")
             
             # 4. Time-based Analysis (if doj exists)
             if 'doj' in df.columns:
                 df['doj'] = pd.to_datetime(df['doj'])
-                plt.figure(figsize=(12, 6))
-                df.groupby(df['doj'].dt.year)['id'].count().plot(kind='bar')
-                plt.title('Employee Hiring Trends')
-                plt.xlabel('Year')
-                plt.ylabel('Number of Employees')
-                plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_hiring_trends.png')
-                plt.close()
+                yearly_counts = df.groupby(df['doj'].dt.year)['id'].count().reset_index()
+                yearly_counts.columns = ['Year', 'Count']
+                
+                # Create a beautiful line chart
+                fig = px.line(
+                    yearly_counts,
+                    x='Year',
+                    y='Count',
+                    title='Employee Hiring Trends Over Time',
+                    markers=True
+                )
+                fig.update_layout(
+                    title_x=0.5,
+                    title_font_size=20,
+                    xaxis_title="Year",
+                    yaxis_title="Number of Employees Hired"
+                )
+                fig.write_html(f'visualizations/{base_filename}_hiring_trends.html')
+                visualizations.append(f'visualizations/{base_filename}_hiring_trends.html')
+                
+                # Add hiring trend insights
+                max_year = yearly_counts.loc[yearly_counts['Count'].idxmax()]
+                insights.append(f"• Highest hiring year: {max_year['Year']} with {max_year['Count']} new employees")
             
             # 5. Skills Analysis (if skills exists)
             if 'skills' in df.columns:
@@ -812,32 +874,83 @@ class DatabaseChatbot:
                     all_skills.extend([s.strip() for s in skills.split(',')])
                 skill_counts = pd.Series(all_skills).value_counts().head(10)
                 
-                plt.figure(figsize=(12, 6))
-                skill_counts.plot(kind='bar')
-                plt.title('Top 10 Skills Distribution')
-                plt.xlabel('Skills')
-                plt.ylabel('Count')
-                plt.xticks(rotation=45, ha='right')
-                plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_skills_dist.png')
-                plt.close()
+                # Create a beautiful bar chart
+                fig = px.bar(
+                    x=skill_counts.index,
+                    y=skill_counts.values,
+                    title='Top 10 Skills Distribution',
+                    color=skill_counts.values,
+                    color_continuous_scale='Viridis'
+                )
+                fig.update_layout(
+                    title_x=0.5,
+                    title_font_size=20,
+                    xaxis_title="Skills",
+                    yaxis_title="Count",
+                    xaxis_tickangle=45
+                )
+                fig.write_html(f'visualizations/{base_filename}_skills_dist.html')
+                visualizations.append(f'visualizations/{base_filename}_skills_dist.html')
+                
+                # Add skills insights
+                top_skill = skill_counts.index[0]
+                insights.append(f"• Most common skill: {top_skill} with {skill_counts[top_skill]} employees")
             
-            # 6. Correlation Heatmap (if multiple numeric columns exist)
-            if len(numeric_cols) > 1:
-                plt.figure(figsize=(10, 8))
-                correlation_matrix = df[numeric_cols].corr()
-                sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0)
-                plt.title('Correlation Matrix')
-                plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_correlation.png')
-                plt.close()
+            # Generate a beautiful HTML report
+            report = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    .container {{ max-width: 1200px; margin: 0 auto; }}
+                    .header {{ text-align: center; margin-bottom: 30px; }}
+                    .insights {{ background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; }}
+                    .visualizations {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }}
+                    .viz-item {{ border: 1px solid #ddd; padding: 10px; border-radius: 5px; }}
+                    h1 {{ color: #2c3e50; }}
+                    h2 {{ color: #34495e; }}
+                    li {{ margin-bottom: 10px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Data Analysis Report</h1>
+                        <p>Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    </div>
+                    
+                    <div class="insights">
+                        <h2>Key Insights</h2>
+                        <ul>
+                            {''.join(f'<li>{insight}</li>' for insight in insights)}
+                        </ul>
+                    </div>
+                    
+                    <div class="visualizations">
+                        <h2>Interactive Visualizations</h2>
+                        {''.join(f'<div class="viz-item"><iframe src="{viz}" width="100%" height="400px" frameborder="0"></iframe></div>' for viz in visualizations)}
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
             
-            return "Visualizations have been saved in the 'visualizations' directory. Key insights:\n" + \
-                   "1. Department distribution shows the organizational structure\n" + \
-                   "2. Salary and performance score distributions help identify compensation patterns\n" + \
-                   "3. Hiring trends show the company's growth over time\n" + \
-                   "4. Skills distribution highlights the team's technical capabilities\n" + \
-                   "5. Correlation analysis reveals relationships between different metrics"
+            # Save the report
+            with open(f'visualizations/{base_filename}_report.html', 'w') as f:
+                f.write(report)
+            
+            return f"""
+            📊 Beautiful visualizations have been created! 
+            
+            🔍 Key Insights:
+            {chr(10).join(insights)}
+            
+            📈 Interactive visualizations are available in the 'visualizations' directory.
+            📄 A comprehensive HTML report has been generated: visualizations/{base_filename}_report.html
+            
+            💡 Suggested next queries:
+            {self.get_suggested_queries()}
+            """
             
         except Exception as e:
             print(f"Error creating visualizations: {str(e)}")
