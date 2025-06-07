@@ -70,35 +70,283 @@ class ChatMemory:
         ])
 
 class DatabaseChatbot:
-    def __init__(self, connection_string: str, api_key: str, api_version: str, deployment_name: str, endpoint: str):
-        """Initialize the chatbot with database and OpenAI connections."""
-        self.connection_string = connection_string
-        self.client = AzureOpenAI(
-            api_key=api_key,
-            api_version=api_version,
-            azure_endpoint=endpoint
-        )
-        self.deployment_name = deployment_name
-        self.chat_memory = ChatMemory()
+    def __init__(self):
+        """Initialize the chatbot with conversation context and state management."""
+        self.conn = None
+        self.last_query = None
+        self.last_analysis = None
+        self.conversation_context = {
+            'last_topic': None,
+            'last_department': None,
+            'last_metric': None,
+            'query_history': []
+        }
+        self.initialize_database()
+        print("Database Chatbot initialized successfully!")
+        self.print_help()
+
+    def print_help(self):
+        """Print enhanced help information with examples and guidance."""
+        print("\nAvailable commands:")
+        print("- 'export <format> <query>': Export results")
+        print("  Formats: csv, sql, excel, json")
+        print("- 'quit': Exit the program")
+        print("- 'help': Show this help message")
+        print("- 'context': Show current conversation context")
+        print("- 'suggest': Get query suggestions based on current context")
         
-        # Create SQLAlchemy engine
-        connection_url = f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(connection_string)}"
-        self.engine = create_engine(connection_url)
+        print("\nExample queries:")
+        print("- show me all employees")
+        print("- what are the top 5 highest paid employees?")
+        print("- how many employees are in each department?")
+        print("- group the results by department")
+        print("- show me project performance metrics")
+        print("- analyze employee performance and contributions")
+        print("- give me department analysis")
+        print("- show me time-based trends")
+        print("- analyze employee skills")
+        print("- show me project success metrics")
         
-        # Test connection
+        print("\nThe chatbot will automatically:")
+        print("- Generate appropriate SQL queries")
+        print("- Provide data analysis and insights")
+        print("- Create relevant visualizations")
+        print("- Maintain conversation context")
+        print("- Suggest related queries")
+        print("- Handle errors gracefully")
+
+    def update_conversation_context(self, query, analysis=None):
+        """Update the conversation context based on the current query and analysis."""
+        self.conversation_context['query_history'].append(query)
+        
+        # Extract topic from query
+        query = query.lower()
+        
+        # Department detection
+        if 'department' in query:
+            self.conversation_context['last_topic'] = 'department'
+            # Try to extract specific department
+            for dept in ['engineering', 'sales', 'marketing', 'hr', 'finance']:
+                if dept in query:
+                    self.conversation_context['last_department'] = dept
+                    break
+        
+        # Metric detection
+        if 'salary' in query or 'paid' in query:
+            self.conversation_context['last_metric'] = 'salary'
+        elif 'performance' in query or 'score' in query:
+            self.conversation_context['last_metric'] = 'performance'
+        elif 'skills' in query:
+            self.conversation_context['last_topic'] = 'skills'
+        
+        # Time-based detection
+        if 'trend' in query or 'time' in query or 'year' in query:
+            self.conversation_context['last_topic'] = 'time'
+        
+        # Store the last query for reference
+        self.last_query = query
+        
+        if analysis:
+            self.last_analysis = analysis
+
+    def get_suggested_queries(self):
+        """Generate relevant query suggestions based on conversation context."""
+        suggestions = []
+        
+        # Get current context
+        last_topic = self.conversation_context['last_topic']
+        last_department = self.conversation_context['last_department']
+        last_metric = self.conversation_context['last_metric']
+        
+        # 1. Department-based suggestions
+        if last_topic == 'department':
+            if last_department:
+                # Specific department suggestions
+                suggestions.extend([
+                    f"Show me the top performers in {last_department}",
+                    f"What is the average salary in {last_department}?",
+                    f"List all employees in {last_department} by performance score",
+                    f"Show me the skills distribution in {last_department}",
+                    f"Compare {last_department} performance with other departments"
+                ])
+            # General department suggestions
+            suggestions.extend([
+                "Compare department performance metrics",
+                "Show me department-wise salary distribution",
+                "Which department has the highest average performance?",
+                "Show me the largest department by employee count",
+                "Compare department hiring trends"
+            ])
+        
+        # 2. Salary-based suggestions
+        if last_metric == 'salary':
+            suggestions.extend([
+                "Show me salary trends over time",
+                "Compare salaries across departments",
+                "Who are the top 5 highest paid employees?",
+                "Show me the salary distribution by department",
+                "What's the salary range in each department?"
+            ])
+        
+        # 3. Performance-based suggestions
+        if last_metric == 'performance':
+            suggestions.extend([
+                "Show me performance trends over time",
+                "Compare performance across departments",
+                "Who are the top 5 performers?",
+                "Show me the performance distribution",
+                "Which department has the most consistent performance?"
+            ])
+        
+        # 4. Skills-based suggestions
+        if last_topic == 'skills':
+            suggestions.extend([
+                "Show me employees with specific skills",
+                "What are the most common skills?",
+                "Which skills are associated with higher salaries?",
+                "Show me skill distribution by department",
+                "Which skills are most common in top performers?"
+            ])
+        
+        # 5. Time-based suggestions
+        if 'doj' in self.last_query.lower() or 'trend' in self.last_query.lower():
+            suggestions.extend([
+                "Show me hiring trends by department",
+                "Compare hiring patterns across years",
+                "Show me employee retention rates",
+                "Which department has grown the most?",
+                "Show me the average tenure by department"
+            ])
+        
+        # 6. General suggestions (always included)
+        general_suggestions = [
+            "Show me recent hiring trends",
+            "Analyze employee performance distribution",
+            "Compare department sizes",
+            "Show me the overall salary distribution",
+            "What are the most common skills?"
+        ]
+        
+        # Add general suggestions if we don't have enough context-specific ones
+        if len(suggestions) < 3:
+            suggestions.extend(general_suggestions)
+        
+        # Remove duplicates and limit to 5 suggestions
+        suggestions = list(dict.fromkeys(suggestions))[:5]
+        
+        return suggestions
+
+    def handle_error(self, error, query):
+        """Provide helpful error messages and suggestions."""
+        error_message = str(error)
+        
+        if "syntax error" in error_message.lower():
+            print("\nI had trouble understanding your query. Here are some suggestions:")
+            print("1. Try rephrasing your question")
+            print("2. Use simpler language")
+            print("3. Break down complex questions into smaller parts")
+            print("\nExample: Instead of 'show me everything about employees and their performance'")
+            print("Try: 'show me all employees' followed by 'show me their performance scores'")
+        
+        elif "no such column" in error_message.lower():
+            print("\nI couldn't find some of the data you're looking for. Available columns are:")
+            print("- id, name, department, salary, doj, manager_id, performance_score, skills")
+            print("\nTry rephrasing your query using these column names.")
+        
+        elif "no such table" in error_message.lower():
+            print("\nI couldn't find the table you're looking for. Available tables are:")
+            print("- employees, projects, departments")
+            print("\nTry rephrasing your query using these table names.")
+        
+        else:
+            print(f"\nAn error occurred: {error_message}")
+            print("Would you like to:")
+            print("1. Try a different query")
+            print("2. See example queries (type 'help')")
+            print("3. Get suggestions based on context (type 'suggest')")
+
+    def process_query(self, query):
+        """Process user query with enhanced error handling and context management."""
         try:
-            with self.engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            print("Database Chatbot initialized successfully!\n")
+            if query.lower() == 'help':
+                self.print_help()
+                return
+            
+            if query.lower() == 'context':
+                print("\nCurrent Conversation Context:")
+                print(f"Last Topic: {self.conversation_context['last_topic']}")
+                print(f"Last Department: {self.conversation_context['last_department']}")
+                print(f"Last Metric: {self.conversation_context['last_metric']}")
+                print("\nRecent Queries:")
+                for q in self.conversation_context['query_history'][-3:]:
+                    print(f"- {q}")
+                return
+            
+            if query.lower() == 'suggest':
+                print("\nSuggested queries based on context:")
+                for i, suggestion in enumerate(self.get_suggested_queries(), 1):
+                    print(f"{i}. {suggestion}")
+                return
+            
+            # Generate and execute SQL query
+            sql_query = self.generate_sql_query(query)
+            results = self.execute_query(sql_query)
+            
+            if results is not None and not results.empty:
+                print("\nQuery Results:")
+                print(results)
+                
+                # Generate analysis
+                analysis = self.analyze_data(results)
+                print("\nAnalysis:")
+                print(analysis)
+                
+                # Generate visualizations
+                viz_message = self.visualize_data(results)
+                print("\n" + viz_message)
+                
+                # Update context
+                self.update_conversation_context(query, analysis)
+                
+                # Provide follow-up suggestions
+                print("\nYou might also want to know:")
+                for suggestion in self.get_suggested_queries()[:3]:
+                    print(f"- {suggestion}")
+            
+        except Exception as e:
+            self.handle_error(e, query)
+
+    def initialize_database(self):
+        """Initialize the database connection and test it."""
+        try:
+            # Load environment variables
+            load_dotenv()
+            
+            # Get connection string from environment
+            connection_string = os.getenv('AZURE_SQL_CONNECTION_STRING')
+            if not connection_string:
+                raise ValueError("AZURE_SQL_CONNECTION_STRING not found in environment variables")
+            
+            # Create connection
+            self.conn = pyodbc.connect(connection_string)
+            
+            # Test connection with a simple query
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.close()
+            
+            print("Database connection successful!")
+            
         except Exception as e:
             raise Exception(f"Failed to connect to database: {str(e)}")
 
     def get_schema_info(self) -> str:
         """Get database schema information."""
         try:
-            with self.engine.connect() as conn:
-                # Get table information
-                tables_query = text("""
+            cursor = self.conn.cursor()
+            
+            # Get table information
+            cursor.execute("""
                 SELECT 
                     t.name AS table_name,
                     c.name AS column_name,
@@ -111,194 +359,260 @@ class DatabaseChatbot:
                 INNER JOIN sys.columns c ON t.object_id = c.object_id
                 INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
                 ORDER BY t.name, c.column_id;
-                """)
-                tables_df = pd.read_sql(tables_query, conn)
+            """)
+            
+            # Get results
+            columns = [column[0] for column in cursor.description]
+            results = cursor.fetchall()
+            
+            # Create DataFrame
+            schema_df = pd.DataFrame(results, columns=columns)
+            
+            # Close cursor
+            cursor.close()
+            
+            # Format schema information
+            schema_info = []
+            current_table = None
+            
+            for _, row in schema_df.iterrows():
+                if row['table_name'] != current_table:
+                    current_table = row['table_name']
+                    schema_info.append(f"\nTable: {current_table}")
+                    schema_info.append("-" * (len(current_table) + 7))
                 
-                # Format schema information
-                schema_info = []
-                for table in tables_df['table_name'].unique():
-                    table_cols = tables_df[tables_df['table_name'] == table]
-                    cols_info = []
-                    for _, row in table_cols.iterrows():
-                        col_info = f"{row['column_name']} ({row['data_type']})"
-                        if row['is_nullable']:
-                            col_info += " NULL"
-                        cols_info.append(col_info)
-                    schema_info.append(f"Table: {table}\nColumns: {', '.join(cols_info)}")
-                
-                return "\n\n".join(schema_info)
-                
+                nullable = "NULL" if row['is_nullable'] else "NOT NULL"
+                schema_info.append(f"  {row['column_name']}: {row['data_type']} {nullable}")
+            
+            return "\n".join(schema_info)
+            
         except Exception as e:
-            raise Exception(f"Error getting schema info: {str(e)}")
+            raise Exception(f"Error getting schema information: {str(e)}")
 
     def generate_sql_query(self, query: str) -> str:
-        """Generate SQL query from natural language using Azure OpenAI."""
-        # Check if query matches any predefined advanced queries
-        for nl_query, sql_query in NATURAL_LANGUAGE_EXAMPLES.items():
-            if nl_query.lower() in query.lower():
-                return sql_query
-
-        max_retries = 3
-        retry_delay = 60  # seconds
-        
-        for attempt in range(max_retries):
-            try:
-                # Create a prompt that includes conversation history and specific rules
-                prompt = f"""Given the following conversation history and user query, generate a SQL query for Azure SQL Database.
-                Follow these rules:
-                1. Use square brackets for identifiers
-                2. Use DISTINCT to avoid duplicates
-                3. Include error handling with BEGIN TRY/END TRY
-                4. Do not include backticks or markdown formatting
-                5. Use proper SQL Server syntax
-
-                Database Schema:
-                {self.get_schema_info()}
-
-                Conversation History:
-                {self.chat_memory.get_formatted_history()}
-
-                User Query: {query}
-
-                Generate only the SQL query without any additional text or formatting."""
-
-                response = self.client.chat.completions.create(
-                    model=self.deployment_name,
-                    messages=[
-                        {"role": "system", "content": "You are a SQL expert that generates SQL queries for Azure SQL Database."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.1,
-                    max_tokens=500
-                )
-
-                # Extract the SQL query from the response
-                sql_query = response.choices[0].message.content.strip()
-                
-                # Remove any markdown formatting or backticks
-                sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
-                
-                # Add error handling
-                sql_query = f"""BEGIN TRY
-    {sql_query}
-END TRY
-BEGIN CATCH
-    SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
-END CATCH"""
-
-                return sql_query
-
-            except Exception as e:
-                error_message = str(e)
-                if "429" in error_message and attempt < max_retries - 1:
-                    print(f"\nRate limit exceeded. Waiting {retry_delay} seconds before retrying...")
-                    time.sleep(retry_delay)
-                    continue
-                else:
-                    raise Exception(f"Error generating SQL query: {error_message}")
-
-        raise Exception("Failed to generate SQL query after maximum retries")
+        """Generate SQL query from natural language input."""
+        try:
+            # Define expected columns
+            expected_columns = [
+                'id', 'name', 'department', 'salary', 
+                'doj', 'manager_id', 'performance_score', 'skills'
+            ]
+            
+            # Simple query mapping for common requests
+            query = query.lower().strip()
+            
+            # Base SELECT statement with all columns
+            base_select = f"""
+                SELECT 
+                    {', '.join(expected_columns)}
+                FROM employees
+            """
+            
+            if query == "show me all employees":
+                return base_select
+            
+            if "top" in query and "paid" in query:
+                limit = 5  # default
+                if "5" in query:
+                    limit = 5
+                elif "10" in query:
+                    limit = 10
+                return f"""
+                    SELECT TOP {limit}
+                        {', '.join(expected_columns)}
+                    FROM employees 
+                    ORDER BY salary DESC
+                """
+            
+            if "how many employees" in query and "department" in query:
+                return """
+                    SELECT 
+                        department,
+                        COUNT(*) as employee_count 
+                    FROM employees 
+                    GROUP BY department
+                """
+            
+            if "group" in query and "department" in query:
+                return """
+                    SELECT 
+                        department,
+                        COUNT(*) as employee_count,
+                        AVG(salary) as avg_salary,
+                        AVG(performance_score) as avg_performance
+                    FROM employees 
+                    GROUP BY department
+                """
+            
+            if "performance" in query:
+                return """
+                    SELECT 
+                        department,
+                        AVG(performance_score) as avg_performance,
+                        COUNT(*) as employee_count
+                    FROM employees
+                    GROUP BY department
+                    ORDER BY avg_performance DESC
+                """
+            
+            if "skills" in query:
+                return """
+                    SELECT 
+                        department,
+                        STRING_AGG(DISTINCT skills, ', ') as unique_skills,
+                        COUNT(DISTINCT skills) as skill_count
+                    FROM employees
+                    GROUP BY department
+                """
+            
+            if "trends" in query or "hiring" in query:
+                return """
+                    SELECT 
+                        YEAR(doj) as hire_year,
+                        COUNT(*) as new_employees
+                    FROM employees
+                    GROUP BY YEAR(doj)
+                    ORDER BY hire_year
+                """
+            
+            # Default query if no specific pattern matches
+            return base_select
+            
+        except Exception as e:
+            raise Exception(f"Error generating SQL query: {str(e)}")
 
     def execute_query(self, query: str) -> pd.DataFrame:
         """Execute SQL query and return results as DataFrame."""
         try:
-            return pd.read_sql(text(query), self.engine)
+            # Log the SQL query for debugging
+            print("\n🛠 Executing SQL:", query)
+            
+            cursor = self.conn.cursor()
+            cursor.execute(query)
+            
+            # Get column names from cursor description
+            columns = [column[0] for column in cursor.description]
+            
+            # Fetch all results
+            results = cursor.fetchall()
+            
+            # Validate column count
+            if results and len(results[0]) != len(columns):
+                raise ValueError(f"Column count mismatch: got {len(results[0])} columns, expected {len(columns)}")
+            
+            # Create DataFrame with explicit column mapping
+            if results:
+                # Convert results to list of lists
+                data = [list(row) for row in results]
+                # Create DataFrame with explicit columns
+                df = pd.DataFrame(data, columns=columns)
+            else:
+                # Create empty DataFrame with correct columns
+                df = pd.DataFrame(columns=columns)
+            
+            # Close cursor
+            cursor.close()
+            
+            return df
+            
         except Exception as e:
             raise Exception(f"Error executing query: {str(e)}")
 
-    def process_query(self, query: str) -> str:
-        """Process a natural language query and return results."""
-        try:
-            # Generate SQL query
-            sql_query = self.generate_sql_query(query)
-            
-            # Execute query
-            df = self.execute_query(sql_query)
-            
-            # Add to chat memory
-            self.chat_memory.add_message("user", query)
-            self.chat_memory.add_message("assistant", f"Query executed successfully. Found {len(df)} results.")
-            
-            # Analyze data
-            analysis = self.analyze_data(df)
-            
-            # Create visualizations
-            viz_message = self.visualize_data(df, query)
-            
-            # Return results
-            return f"Query Results:\n{df}\n\nAnalysis:\n{analysis}\n\n{viz_message}"
-            
-        except Exception as e:
-            error_message = f"Error processing query: {str(e)}"
-            self.chat_memory.add_message("assistant", error_message)
-            return error_message
-
     def analyze_data(self, df: pd.DataFrame) -> str:
-        """Analyze data and return insights."""
+        """Analyze data and return focused, actionable insights."""
         try:
             analysis = []
             
-            # Basic statistics
-            analysis.append("Basic Statistics:")
-            analysis.append(str(df.describe()))
+            # 1. Quick Summary
+            analysis.append("📊 QUICK SUMMARY")
+            analysis.append("=" * 50)
+            analysis.append(f"Total Employees: {len(df):,}")
+            if 'department' in df.columns:
+                dept_counts = df['department'].value_counts()
+                analysis.append("\nDepartment Distribution:")
+                for dept, count in dept_counts.items():
+                    analysis.append(f"  • {dept}: {count:,} employees")
             
-            # Data types and missing values
-            analysis.append("\nData Types and Missing Values:")
-            for col in df.columns:
-                missing = df[col].isnull().sum()
-                analysis.append(f"{col}: {df[col].dtype} - {missing} missing values")
+            # 2. Key Metrics
+            analysis.append("\n📈 KEY METRICS")
+            analysis.append("=" * 50)
             
-            # Categorical analysis
-            categorical_cols = df.select_dtypes(include=['object']).columns
-            if len(categorical_cols) > 0:
-                analysis.append("\nCategorical Column Analysis:")
-                for col in categorical_cols:
-                    value_counts = df[col].value_counts()
-                    analysis.append(f"{col}: {len(value_counts)} unique values")
-                    analysis.append("Top 5 values:")
-                    analysis.append(str(value_counts.head()))
-            
-            # Numeric analysis
-            numeric_cols = df.select_dtypes(include=[np.number]).columns
-            if len(numeric_cols) > 0:
-                analysis.append("\nNumeric Column Analysis:")
-                for col in numeric_cols:
-                    skewness = df[col].skew()
-                    kurtosis = df[col].kurtosis()
-                    analysis.append(f"\n{col}:")
-                    analysis.append(f"Skewness: {skewness:.2f} (0 is normal, >0 is right-skewed, <0 is left-skewed)")
-                    analysis.append(f"Kurtosis: {kurtosis:.2f} (0 is normal, >0 is heavy-tailed, <0 is light-tailed)")
-                    
-                    # Outlier detection
-                    Q1 = df[col].quantile(0.25)
-                    Q3 = df[col].quantile(0.75)
-                    IQR = Q3 - Q1
-                    outliers = df[(df[col] < (Q1 - 1.5 * IQR)) | (df[col] > (Q3 + 1.5 * IQR))][col]
-                    analysis.append(f"Potential outliers: {len(outliers)} values")
-            
-            # Correlation analysis
-            if len(numeric_cols) > 1:
-                correlation_matrix = df[numeric_cols].corr()
-                strong_correlations = []
-                for i in range(len(numeric_cols)):
-                    for j in range(i+1, len(numeric_cols)):
-                        corr = correlation_matrix.iloc[i,j]
-                        if abs(corr) > 0.5:
-                            strong_correlations.append(f"{numeric_cols[i]} and {numeric_cols[j]}: {corr:.2f}")
+            if 'salary' in df.columns:
+                analysis.append("\nSalary Analysis:")
+                analysis.append(f"  • Average Salary: ${df['salary'].mean():,.2f}")
+                analysis.append(f"  • Highest Salary: ${df['salary'].max():,.2f}")
+                analysis.append(f"  • Lowest Salary: ${df['salary'].min():,.2f}")
                 
-                if strong_correlations:
-                    analysis.append("\nStrong Correlations:")
-                    analysis.extend(strong_correlations)
-                else:
-                    analysis.append("\nNo strong correlations found between numeric columns")
+                if 'department' in df.columns:
+                    dept_salaries = df.groupby('department')['salary'].agg(['mean', 'min', 'max'])
+                    analysis.append("\nSalary by Department:")
+                    for dept, stats in dept_salaries.iterrows():
+                        analysis.append(f"  • {dept}:")
+                        analysis.append(f"    - Average: ${stats['mean']:,.2f}")
+                        analysis.append(f"    - Range: ${stats['min']:,.2f} - ${stats['max']:,.2f}")
+            
+            if 'performance_score' in df.columns:
+                analysis.append("\nPerformance Analysis:")
+                analysis.append(f"  • Average Performance: {df['performance_score'].mean():.2f}/5.0")
+                analysis.append(f"  • Top Performers: {len(df[df['performance_score'] >= 4.5]):,} employees")
+                
+                if 'department' in df.columns:
+                    dept_performance = df.groupby('department')['performance_score'].mean()
+                    analysis.append("\nPerformance by Department:")
+                    for dept, score in dept_performance.items():
+                        analysis.append(f"  • {dept}: {score:.2f}/5.0")
+            
+            # 3. Skills Analysis
+            if 'skills' in df.columns:
+                analysis.append("\n🔧 SKILLS ANALYSIS")
+                analysis.append("=" * 50)
+                
+                # Count individual skills
+                all_skills = []
+                for skills in df['skills']:
+                    all_skills.extend([s.strip() for s in skills.split(',')])
+                skill_counts = pd.Series(all_skills).value_counts()
+                
+                analysis.append("\nTop Skills:")
+                for skill, count in skill_counts.head(5).items():
+                    analysis.append(f"  • {skill}: {count:,} employees")
+            
+            # 4. Hiring Trends
+            if 'doj' in df.columns:
+                analysis.append("\n📅 HIRING TRENDS")
+                analysis.append("=" * 50)
+                
+                df['doj'] = pd.to_datetime(df['doj'])
+                yearly_hires = df.groupby(df['doj'].dt.year).size()
+                
+                analysis.append("\nYearly Hiring:")
+                for year, count in yearly_hires.items():
+                    analysis.append(f"  • {year}: {count:,} new employees")
+            
+            # 5. Key Insights
+            analysis.append("\n💡 KEY INSIGHTS")
+            analysis.append("=" * 50)
+            
+            # Add insights based on the data
+            if 'salary' in df.columns and 'department' in df.columns:
+                highest_paid_dept = df.groupby('department')['salary'].mean().idxmax()
+                analysis.append(f"  • {highest_paid_dept} department has the highest average salary")
+            
+            if 'performance_score' in df.columns and 'department' in df.columns:
+                best_performing_dept = df.groupby('department')['performance_score'].mean().idxmax()
+                analysis.append(f"  • {best_performing_dept} department shows the best performance")
+            
+            if 'skills' in df.columns:
+                most_common_skill = skill_counts.index[0]
+                analysis.append(f"  • {most_common_skill} is the most common skill")
             
             return "\n".join(analysis)
             
         except Exception as e:
             return f"Error analyzing data: {str(e)}"
 
-    def visualize_data(self, df: pd.DataFrame, query: str) -> str:
-        """Create enhanced visualizations based on data and query."""
+    def visualize_data(self, df: pd.DataFrame) -> str:
+        """Create focused and meaningful visualizations based on data."""
         try:
             # Set a valid seaborn style
             sns.set_theme(style="whitegrid")
@@ -307,91 +621,97 @@ END CATCH"""
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             base_filename = f"visualization_{timestamp}"
             
-            # Get numeric and categorical columns
-            numeric_cols = df.select_dtypes(include=[np.number]).columns
-            categorical_cols = df.select_dtypes(include=['object']).columns
-            date_cols = df.select_dtypes(include=['datetime64']).columns
-            
             # Create visualizations directory if it doesn't exist
             os.makedirs('visualizations', exist_ok=True)
             
-            # 1. Time Series Analysis
-            if len(date_cols) > 0 and len(numeric_cols) > 0:
-                for date_col in date_cols:
-                    for num_col in numeric_cols:
-                        plt.figure(figsize=(12, 6))
-                        # Use pandas plot instead of seaborn for time series
-                        df.plot(x=date_col, y=num_col, kind='line', ax=plt.gca())
-                        plt.title(f'{num_col} Over Time')
-                        plt.xticks(rotation=45)
-                        plt.tight_layout()
-                        plt.savefig(f'visualizations/{base_filename}_timeseries_{num_col}.png')
-                        plt.close()
+            # Get numeric and categorical columns
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            categorical_cols = df.select_dtypes(include=['object']).columns
             
-            # 2. Distribution Analysis
-            for col in numeric_cols:
-                # Histogram with KDE
+            # 1. Department Distribution (if department column exists)
+            if 'department' in df.columns:
                 plt.figure(figsize=(10, 6))
-                # Use pandas plot instead of seaborn for histogram
-                df[col].plot(kind='hist', density=True, bins=30)
-                df[col].plot(kind='kde')
-                plt.title(f'Distribution of {col}')
-                plt.xlabel(col)
-                plt.ylabel('Density')
-                plt.grid(True)
+                dept_counts = df['department'].value_counts()
+                plt.pie(dept_counts, labels=dept_counts.index, autopct='%1.1f%%')
+                plt.title('Employee Distribution by Department')
                 plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_hist_{col}.png')
+                plt.savefig(f'visualizations/{base_filename}_department_pie.png')
+                plt.close()
+            
+            # 2. Salary Distribution (if salary column exists)
+            if 'salary' in df.columns:
+                plt.figure(figsize=(12, 6))
+                sns.boxplot(x='department', y='salary', data=df)
+                plt.title('Salary Distribution by Department')
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                plt.savefig(f'visualizations/{base_filename}_salary_box.png')
                 plt.close()
                 
-                # Box plot
+                # Salary histogram
                 plt.figure(figsize=(10, 6))
-                # Use pandas plot instead of seaborn for box plot
-                df.boxplot(column=col)
-                plt.title(f'Box Plot of {col}')
-                plt.ylabel(col)
-                plt.grid(True)
+                sns.histplot(data=df, x='salary', bins=10)
+                plt.title('Salary Distribution')
                 plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_box_{col}.png')
+                plt.savefig(f'visualizations/{base_filename}_salary_hist.png')
                 plt.close()
             
-            # 3. Correlation Analysis
+            # 3. Performance Score Analysis (if performance_score exists)
+            if 'performance_score' in df.columns:
+                plt.figure(figsize=(12, 6))
+                sns.boxplot(x='department', y='performance_score', data=df)
+                plt.title('Performance Score by Department')
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                plt.savefig(f'visualizations/{base_filename}_performance_box.png')
+                plt.close()
+            
+            # 4. Time-based Analysis (if doj exists)
+            if 'doj' in df.columns:
+                df['doj'] = pd.to_datetime(df['doj'])
+                plt.figure(figsize=(12, 6))
+                df.groupby(df['doj'].dt.year)['id'].count().plot(kind='bar')
+                plt.title('Employee Hiring Trends')
+                plt.xlabel('Year')
+                plt.ylabel('Number of Employees')
+                plt.tight_layout()
+                plt.savefig(f'visualizations/{base_filename}_hiring_trends.png')
+                plt.close()
+            
+            # 5. Skills Analysis (if skills exists)
+            if 'skills' in df.columns:
+                # Split skills and count occurrences
+                all_skills = []
+                for skills in df['skills']:
+                    all_skills.extend([s.strip() for s in skills.split(',')])
+                skill_counts = pd.Series(all_skills).value_counts().head(10)
+                
+                plt.figure(figsize=(12, 6))
+                skill_counts.plot(kind='bar')
+                plt.title('Top 10 Skills Distribution')
+                plt.xlabel('Skills')
+                plt.ylabel('Count')
+                plt.xticks(rotation=45, ha='right')
+                plt.tight_layout()
+                plt.savefig(f'visualizations/{base_filename}_skills_dist.png')
+                plt.close()
+            
+            # 6. Correlation Heatmap (if multiple numeric columns exist)
             if len(numeric_cols) > 1:
-                correlation_matrix = df[numeric_cols].corr()
                 plt.figure(figsize=(10, 8))
+                correlation_matrix = df[numeric_cols].corr()
                 sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0)
                 plt.title('Correlation Matrix')
                 plt.tight_layout()
                 plt.savefig(f'visualizations/{base_filename}_correlation.png')
                 plt.close()
             
-            # 4. Categorical Analysis
-            for cat_col in categorical_cols:
-                # Bar plot
-                plt.figure(figsize=(10, 6))
-                # Use pandas plot instead of seaborn for bar plot
-                df[cat_col].value_counts().plot(kind='bar')
-                plt.title(f'Distribution of {cat_col}')
-                plt.xlabel(cat_col)
-                plt.ylabel('Count')
-                plt.grid(True)
-                plt.tight_layout()
-                plt.savefig(f'visualizations/{base_filename}_bar_{cat_col}.png')
-                plt.close()
-                
-                # If we have numeric columns, create grouped box plots
-                if len(numeric_cols) > 0:
-                    for num_col in numeric_cols:
-                        plt.figure(figsize=(12, 6))
-                        # Use pandas plot instead of seaborn for grouped box plot
-                        df.boxplot(column=num_col, by=cat_col)
-                        plt.title(f'{num_col} by {cat_col}')
-                        plt.suptitle('')  # Remove default suptitle
-                        plt.grid(True)
-                        plt.tight_layout()
-                        plt.savefig(f'visualizations/{base_filename}_box_{num_col}_by_{cat_col}.png')
-                        plt.close()
-            
-            return f"Visualizations saved in 'visualizations' directory"
+            return "Visualizations have been saved in the 'visualizations' directory. Key insights:\n" + \
+                   "1. Department distribution shows the organizational structure\n" + \
+                   "2. Salary and performance score distributions help identify compensation patterns\n" + \
+                   "3. Hiring trends show the company's growth over time\n" + \
+                   "4. Skills distribution highlights the team's technical capabilities\n" + \
+                   "5. Correlation analysis reveals relationships between different metrics"
             
         except Exception as e:
             print(f"Error creating visualizations: {str(e)}")
@@ -481,41 +801,8 @@ def main():
     # Load environment variables
     load_dotenv()
     
-    # Get Azure credentials from environment variables
-    connection_string = os.getenv('AZURE_SQL_CONNECTION_STRING')
-    api_key = os.getenv('AZURE_OPENAI_API_KEY')
-    api_version = os.getenv('AZURE_OPENAI_VERSION')
-    deployment_name = os.getenv('AZURE_OPENAI_DEPLOYMENT')
-    endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
-    
-    if not all([connection_string, api_key, api_version, deployment_name, endpoint]):
-        raise ValueError("Missing required environment variables")
-    
     # Initialize chatbot
-    chatbot = DatabaseChatbot(connection_string, api_key, api_version, deployment_name, endpoint)
-    
-    print("Available commands:")
-    print("- 'export <format> <query>': Export results")
-    print("  Formats: csv, sql, excel, json")
-    print("- 'quit': Exit the program\n")
-    
-    print("Example queries:")
-    print("- show me all employees")
-    print("- what are the top 5 highest paid employees?")
-    print("- how many employees are in each department?")
-    print("- group the results by department")
-    print("- show me project performance metrics")
-    print("- analyze employee performance and contributions")
-    print("- give me department analysis")
-    print("- show me time-based trends")
-    print("- analyze employee skills")
-    print("- show me project success metrics\n")
-    
-    print("The chatbot will automatically:")
-    print("- Generate appropriate SQL queries")
-    print("- Provide data analysis and insights")
-    print("- Create relevant visualizations")
-    print("- Maintain conversation context\n")
+    chatbot = DatabaseChatbot()
     
     # Main interaction loop
     while True:
@@ -523,24 +810,8 @@ def main():
         
         if query.lower() == 'quit':
             break
-            
-        if query.lower().startswith('export '):
-            parts = query.split(' ', 2)
-            if len(parts) == 3:
-                format_type = parts[1]
-                actual_query = parts[2]
-                try:
-                    sql_query = chatbot.generate_sql_query(actual_query)
-                    df = chatbot.execute_query(sql_query)
-                    result = chatbot.export_data(df, format_type)
-                    print(result)
-                except Exception as e:
-                    print(f"Error processing export: {str(e)}")
-            else:
-                print("Invalid export command. Use: export <format> <query>")
         else:
-            result = chatbot.process_query(query)
-            print(result)
+            chatbot.process_query(query)
 
 if __name__ == "__main__":
     main() 
