@@ -754,13 +754,13 @@ async def execute_query(request: QueryRequest):
     try:
         if not request.query.strip():
             raise HTTPException(status_code=400, detail="Query cannot be empty")
-
+        
         # Format the response based on the query
         response_data = format_response(request.query)
         
         # Generate suggestions based on the query and results
         suggestions = generate_suggestions(request.query, response_data["results"])
-
+        
         return {
             "response": response_data["response"],
             "results": response_data["results"],

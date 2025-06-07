@@ -194,8 +194,8 @@ function App() {
     if (!results || results.length === 0) return null;
 
     const chartData = prepareChartData(results, type);
-    
-    return (
+
+  return (
       <div className="results-container">
         <div className="results-header">
           <h3>Results ({results.length} records)</h3>
@@ -283,7 +283,7 @@ function App() {
     <div className="App">
       <div className="chat-container">
         <div className="messages">
-          {messages.map((message, index) => (
+        {messages.map((message, index) => (
             <div key={index} className={`message ${message.role}`}>
               <div className="message-content">
                 {message.content}
@@ -299,7 +299,7 @@ function App() {
               </div>
             </div>
           )}
-          <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} />
         </div>
         <form onSubmit={handleSubmit} className="input-form">
           <input
