@@ -16,11 +16,30 @@ A powerful chatbot interface that allows users to query databases using natural 
   - Maintains context of previous queries
   - Supports drill-down and refinement
   - Chat-like interface for multi-turn interaction
+  - Smart suggestion system that avoids duplicate queries
+  - Context-aware follow-up recommendations
 
 - 📊 Dataset Awareness
   - Schema preview
   - Preset query buttons
   - Export functionality (CSV, Excel, JSON)
+  - Dynamic visualization generation
+  - Comprehensive data analysis
+
+### Conversation Features
+- 🔄 Context Management
+  - Tracks conversation history
+  - Maintains query context
+  - Remembers previous topics and metrics
+  - Smart suggestion filtering
+  - Department and metric tracking
+
+- 💡 Smart Suggestions
+  - Context-aware query recommendations
+  - Non-repetitive suggestions
+  - Topic-based follow-ups
+  - Department-specific queries
+  - Metric-focused analysis options
 
 ### Security Features
 - SQL Injection Prevention
@@ -78,16 +97,22 @@ A powerful chatbot interface that allows users to query databases using natural 
 2. View available tables in the schema section
 3. Use preset queries or type your own natural language query
 4. View results, generated SQL, and analysis
-5. Export results in various formats
+5. Use the 'suggest' command to get context-aware query suggestions
+6. Use the 'context' command to view current conversation context
 
-## Example Queries
+### Example Queries
+- "Show me all employees"
+- "What are the top 5 highest paid employees?"
+- "How many employees are in each department?"
+- "Show me project performance metrics"
+- "Analyze employee performance and contributions"
 
-- "Show all employees"
-- "Top 5 products by sales"
-- "Sales by month"
-- "List low-stock products"
-- "How many employees joined last year?"
-- "Break down sales by department"
+### Available Commands
+- `help`: Show help message
+- `context`: Show current conversation context
+- `suggest`: Get query suggestions based on current context
+- `export <format>`: Export results (formats: csv, sql, excel, json)
+- `quit`: Exit the program
 
 ## Security Considerations
 
@@ -118,12 +143,7 @@ A powerful chatbot interface that allows users to query databases using natural 
 3. Core Logic: Extend `DatabaseChatbot` class in `db_chatbot.py`
 
 ## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+Feel free to submit issues and enhancement requests!
 
 ## License
 
