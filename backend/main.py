@@ -20,6 +20,7 @@ import uvicorn
 import httpx
 import io
 import sqlite3
+import openai
 
 # Load environment variables
 load_dotenv()
@@ -68,6 +69,9 @@ engine = create_engine(connection_url)
 # Initialize chatbot
 chatbot = DatabaseChatbot()
 
+# Load OpenAI API key from environment variable
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 # Models
 class Message(BaseModel):
     role: str
@@ -91,6 +95,9 @@ class QueryResponse(BaseModel):
 class ExportRequest(BaseModel):
     data: List[Dict[str, Any]]
     format: str
+
+class SuggestionRequest(BaseModel):
+    query: str
 
 # Helper functions
 def get_schema_info() -> str:
@@ -135,29 +142,35 @@ def generate_sql_query(query: str) -> str:
     """Generate SQL query from natural language using Azure OpenAI."""
     max_retries = 3
     retry_delay = 60  # seconds
-    
+
     for attempt in range(max_retries):
         try:
-            # Create a prompt that includes schema information and specific rules
-            prompt = f"""Given the following user query, generate a SQL query for Azure SQL Database.
-            Follow these rules:
-            1. Use square brackets for identifiers
-            2. Use DISTINCT to avoid duplicates
-            3. Include error handling with BEGIN TRY/END TRY
-            4. Do not include backticks or markdown formatting
-            5. Use proper SQL Server syntax
+            # Improved, more conversational prompt
+            prompt = f"""
+You are an expert SQL assistant specialized in generating safe and accurate SQL Server queries for Azure SQL Database.
 
-            Database Schema:
-            {get_schema_info()}
+Rules:
+- Use only the tables and columns explicitly listed in the following database schema.
+- Do NOT guess or invent any table or column names.
+- If the question is ambiguous, incomplete, or cannot be answered with the given schema, respond exactly with:
+  -- Unable to generate SQL for this question.
+- Do NOT include any explanations, comments, or extra text besides the SQL query.
+- Format the SQL query with proper indentation and uppercase SQL keywords.
+- Ensure the SQL syntax is fully compatible with Azure SQL Database and uses SQL Server dialect.
+- Always sanitize inputs or handle potential SQL injection vectors by limiting query construction to schema only.
 
-            User Query: {query}
+Database Schema:
+{get_schema_info()}
 
-            Generate only the SQL query without any additional text or formatting."""
+User Question:
+{query}
+
+Provide ONLY the SQL query as your answer."""
 
             response = client.chat.completions.create(
                 model=AZURE_OPENAI_DEPLOYMENT,
                 messages=[
-                    {"role": "system", "content": "You are a SQL expert that generates SQL queries for Azure SQL Database."},
+                    {"role": "system", "content": "You are a helpful assistant that generates SQL queries for Azure SQL Database from natural language questions. If the question is ambiguous, ask for clarification."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
@@ -166,13 +179,13 @@ def generate_sql_query(query: str) -> str:
 
             # Extract the SQL query from the response
             sql_query = response.choices[0].message.content.strip()
-            
+
             # Remove any markdown formatting or backticks
             sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
-            
+
             # Add error handling
             sql_query = f"""BEGIN TRY
-    {sql_query}
+{sql_query}
 END TRY
 BEGIN CATCH
     SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
@@ -234,7 +247,7 @@ def analyze_data(df: pd.DataFrame) -> str:
         return f"Error analyzing data: {str(e)}"
 
 def generate_suggestions(query: str, results: List[Dict[str, Any]]) -> List[str]:
-    """Generate relevant follow-up questions based on the current query and results."""
+    """Generate easiest basic relevant follow-up questions based on the current query and results that any human would ask"""
     try:
         prompt = f"""
         Based on the following query and its results, generate 3-4 relevant follow-up questions.
@@ -755,17 +768,17 @@ async def execute_query(request: QueryRequest):
         if not request.query.strip():
             raise HTTPException(status_code=400, detail="Query cannot be empty")
         
-        # Format the response based on the query
-        response_data = format_response(request.query)
-        
-        # Generate suggestions based on the query and results
-        suggestions = generate_suggestions(request.query, response_data["results"])
-        
+        sql_query = generate_sql_query(request.query)
+        with engine.connect() as conn:
+            results_df = pd.read_sql(sql_query, conn)
+        results = results_df.to_dict(orient='records')
+        # Optionally, generate suggestions based on the query and results
+        suggestions = generate_suggestions(request.query, results)
         return {
-            "response": response_data["response"],
-            "results": response_data["results"],
+            "response": f"Results for: {request.query}",
+            "results": results,
             "suggestions": suggestions,
-            "visualizationType": response_data["visualizationType"]
+            "visualizationType": "auto"  # or however you want to determine this
         }
 
     except Exception as e:
@@ -866,5 +879,19 @@ async def export_data(request: ExportRequest):
             detail=f"An error occurred while exporting data: {str(e)}"
         )
 
+@app.post("/api/suggestions")
+async def get_suggestions(request: SuggestionRequest):
+    try:
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=f"Generate 3 suggestions for the following query: {request.query}",
+            max_tokens=50,
+            temperature=0.7
+        )
+        suggestions = [choice.text.strip() for choice in response.choices]
+        return {"suggestions": suggestions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -7,14 +7,27 @@ import * as XLSX from 'xlsx';
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
+const NATURAL_SUGGESTIONS = [
+  "How many employees work in each department?",
+  "Who are the top 5 highest paid employees?",
+  "Show me the average salary by department.",
+  "What are the most common skills among employees?",
+  "Show me recent hiring trends.",
+  "Which department has the best performance ratings?",
+  "List all employees who joined in the last year.",
+  "Show me the gender distribution in the company.",
+  "What is the average years of experience by department?",
+  "Show me a breakdown of employees by education level."
+];
+
 function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [visualizationType, setVisualizationType] = useState(null);
   const messagesEndRef = useRef(null);
-  const [suggestions, setSuggestions] = useState([]);
   const [error, setError] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -55,11 +68,10 @@ function App() {
           role: 'assistant', 
           content: data.response, 
           results: data.results, 
-          visualizationType: data.visualizationType 
+          visualizationType: data.visualizationType,
+          suggestions: data.suggestions || []
         }
       ]);
-      
-      setSuggestions(data.suggestions || []);
       setInput('');
     } catch (err) {
       setError(err.message);
@@ -264,17 +276,26 @@ function App() {
 
   const renderSuggestions = (suggestions) => {
     if (!suggestions || suggestions.length === 0) return null;
-
+    
     return (
-      <div className="suggestions">
-        <h4>You might also want to know:</h4>
-        <ul>
+      <div className="suggestions-container">
+        <div className="suggestions-header">
+          <span>Suggested Questions:</span>
+        </div>
+        <div className="suggestions-list">
           {suggestions.map((suggestion, index) => (
-            <li key={index} onClick={() => setInput(suggestion)}>
+            <button
+              key={index}
+              className="suggestion-button"
+              onClick={() => {
+                setInput(suggestion);
+                handleSubmit({ preventDefault: () => {} });
+              }}
+            >
               {suggestion}
-            </li>
+            </button>
           ))}
-        </ul>
+        </div>
       </div>
     );
   };
@@ -282,13 +303,12 @@ function App() {
   return (
     <div className="App">
       <div className="chat-container">
-        <div className="messages">
-        {messages.map((message, index) => (
+        <div className="messages-container">
+          {messages.map((message, index) => (
             <div key={index} className={`message ${message.role}`}>
               <div className="message-content">
                 {message.content}
                 {message.results && renderResults(message.results, message.visualizationType)}
-                {message.suggestions && renderSuggestions(message.suggestions)}
               </div>
             </div>
           ))}
@@ -299,20 +319,56 @@ function App() {
               </div>
             </div>
           )}
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
         </div>
         <form onSubmit={handleSubmit} className="input-form">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question about the database..."
+            placeholder="Ask a question about your data..."
             disabled={isLoading}
           />
           <button type="submit" disabled={isLoading}>
-            {isLoading ? 'Sending...' : 'Send'}
+            {isLoading ? 'Thinking...' : 'Send'}
           </button>
         </form>
+        <button
+          className="suggestions-toggle"
+          onClick={() => setShowSuggestions((prev) => !prev)}
+          style={{ marginTop: '0.5rem', marginBottom: '1rem' }}
+        >
+          Suggestions
+        </button>
+        {showSuggestions && (
+          <div className="suggestions-modal">
+            <div className="suggestions-modal-content">
+              <h4>Example Questions</h4>
+              <ul>
+                {NATURAL_SUGGESTIONS.map((suggestion, idx) => (
+                  <li key={idx}>
+                    <button
+                      className="suggestion-button"
+                      onClick={() => {
+                        setInput(suggestion);
+                        setShowSuggestions(false);
+                        handleSubmit({ preventDefault: () => {} });
+                      }}
+                    >
+                      {suggestion}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                className="close-suggestions"
+                onClick={() => setShowSuggestions(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

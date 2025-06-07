@@ -14,7 +14,8 @@ import {
   ListItemText,
   Grid,
   Card,
-  CardContent
+  CardContent,
+  Autocomplete
 } from '@mui/material';
 import { 
   Send as SendIcon, 
@@ -43,6 +44,19 @@ import {
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+const VALID_QUESTIONS = [
+  "Show all employees",
+  "Top 5 products by sales",
+  "Sales by month",
+  "List low-stock products",
+  "What is the average salary?",
+  "How many employees are in each department?",
+  "Show employees hired in the last year",
+  "List departments with more than 10 employees",
+  "Show total sales by region",
+  "Which products are out of stock?"
+];
+
 function Chat() {
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState([]);
@@ -50,6 +64,7 @@ function Chat() {
   const [schemaInfo, setSchemaInfo] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [visualizationType, setVisualizationType] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
   const messagesEndRef = useRef(null);
 
   const presetQueries = [
@@ -257,132 +272,180 @@ function Chat() {
     }
   };
 
+  const generateSuggestions = async (input) => {
+    if (!input.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const response = await axios.post(`${API_URL}/api/suggestions`, { query: input });
+      setSuggestions(response.data.suggestions);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSuggestions([]);
+    }
+  };
+
+  const handleInputChange = (event, newValue) => {
+    setQuery(newValue || event.target.value);
+    generateSuggestions(newValue || event.target.value);
+  };
+
+  // Filter suggestions based on previous user questions
+  const askedQuestions = messages.filter(m => m.type === 'user').map(m => m.content);
+  const contextSuggestions = VALID_QUESTIONS.filter(q => !askedQuestions.includes(q));
+
   return (
-    <Box>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Chat with Your Database
-      </Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2 }}>
+      {/* Suggestions Panel */}
+      <Paper sx={{ minWidth: 260, maxWidth: 300, p: 2, height: '80vh', overflowY: 'auto', mr: 2 }}>
+        <Typography variant="h6" gutterBottom>Suggestions</Typography>
+        <List>
+          {contextSuggestions.length === 0 ? (
+            <ListItem><ListItemText primary="No more suggestions" /></ListItem>
+          ) : (
+            contextSuggestions.map((suggestion, idx) => (
+              <ListItem button key={idx} onClick={() => setQuery(suggestion)}>
+                <ListItemText primary={suggestion} />
+              </ListItem>
+            ))
+          )}
+        </List>
+      </Paper>
 
-      {/* Schema Information */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Available Tables
+      {/* Main Chat Area */}
+      <Box sx={{ flex: 1 }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Chat with Your Database
         </Typography>
-        {schemaInfo ? (
-          <Typography component="pre" sx={{ 
-            overflowX: 'auto', 
-            whiteSpace: 'pre-wrap',
-            wordWrap: 'break-word',
-            fontFamily: 'monospace'
-          }}>
-            {schemaInfo}
+
+        {/* Schema Information */}
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            Available Tables
           </Typography>
-        ) : (
-          <CircularProgress size={20} />
-        )}
-      </Paper>
+          {schemaInfo ? (
+            <Typography component="pre" sx={{ 
+              overflowX: 'auto', 
+              whiteSpace: 'pre-wrap',
+              wordWrap: 'break-word',
+              fontFamily: 'monospace'
+            }}>
+              {schemaInfo}
+            </Typography>
+          ) : (
+            <CircularProgress size={20} />
+          )}
+        </Paper>
 
-      {/* Quick Queries */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Quick Queries
-        </Typography>
-        <Grid container spacing={2}>
-          {presetQueries.map((preset, index) => (
-            <Grid item xs={12} sm={6} md={3} key={index}>
-              <Card>
-                <CardContent>
-                  <Typography variant="body2" color="text.secondary">
-                    {preset}
-                  </Typography>
-                  <Button 
-                    size="small" 
-                    onClick={() => setQuery(preset)}
-                    sx={{ mt: 1 }}
-                  >
-                    Try it
-                  </Button>
-                </CardContent>
-              </Card>
-            </Grid>
+        {/* Quick Queries */}
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            Quick Queries
+          </Typography>
+          <Grid container spacing={2}>
+            {presetQueries.map((preset, index) => (
+              <Grid item xs={12} sm={6} md={3} key={index}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      {preset}
+                    </Typography>
+                    <Button 
+                      size="small" 
+                      onClick={() => setQuery(preset)}
+                      sx={{ mt: 1 }}
+                    >
+                      Try it
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+
+        {/* Chat Interface */}
+        <Paper sx={{ p: 2, mb: 2, height: '60vh', overflow: 'auto' }}>
+          {messages.map((message, index) => (
+            <div key={index}>{renderMessage(message)}</div>
           ))}
-        </Grid>
-      </Paper>
+          <div ref={messagesEndRef} />
+        </Paper>
 
-      {/* Chat Interface */}
-      <Paper sx={{ p: 2, mb: 2, height: '60vh', overflow: 'auto' }}>
-        {messages.map((message, index) => (
-          <div key={index}>{renderMessage(message)}</div>
-        ))}
-        <div ref={messagesEndRef} />
-      </Paper>
-
-      {/* Input Area */}
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Ask a question about your data..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleQuery()}
-          disabled={loading}
-        />
-        <IconButton 
-          color="primary" 
-          onClick={handleQuery}
-          disabled={loading || !query.trim()}
-        >
-          {loading ? <CircularProgress size={24} /> : <SendIcon />}
-        </IconButton>
-        <IconButton
-          color="primary"
-          onClick={(e) => setAnchorEl(e.currentTarget)}
-        >
-          <SaveIcon />
-        </IconButton>
-      </Box>
-
-      {/* Export Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={() => setAnchorEl(null)}
-      >
-        <MenuItem onClick={() => { handleExport('csv'); setAnchorEl(null); }}>
-          Export as CSV
-        </MenuItem>
-        <MenuItem onClick={() => { handleExport('json'); setAnchorEl(null); }}>
-          Export as JSON
-        </MenuItem>
-        <MenuItem onClick={() => { handleExport('excel'); setAnchorEl(null); }}>
-          Export as Excel
-        </MenuItem>
-      </Menu>
-
-      {/* Visualization Controls */}
-      {messages.some(m => m.type === 'results') && (
-        <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+        {/* Input Area */}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Autocomplete
+            freeSolo
+            options={suggestions}
+            inputValue={query}
+            onInputChange={handleInputChange}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                fullWidth
+                variant="outlined"
+                placeholder="Ask a question about your data..."
+                disabled={loading}
+              />
+            )}
+          />
           <IconButton 
-            color={visualizationType === 'bar' ? 'primary' : 'default'}
-            onClick={() => setVisualizationType('bar')}
+            color="primary" 
+            onClick={handleQuery}
+            disabled={loading || !query.trim()}
           >
-            <BarChartIcon />
+            {loading ? <CircularProgress size={24} /> : <SendIcon />}
           </IconButton>
-          <IconButton 
-            color={visualizationType === 'pie' ? 'primary' : 'default'}
-            onClick={() => setVisualizationType('pie')}
+          <IconButton
+            color="primary"
+            onClick={(e) => setAnchorEl(e.currentTarget)}
           >
-            <PieChartIcon />
-          </IconButton>
-          <IconButton 
-            color={visualizationType === 'line' ? 'primary' : 'default'}
-            onClick={() => setVisualizationType('line')}
-          >
-            <LineChartIcon />
+            <SaveIcon />
           </IconButton>
         </Box>
-      )}
+
+        {/* Export Menu */}
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={() => setAnchorEl(null)}
+        >
+          <MenuItem onClick={() => { handleExport('csv'); setAnchorEl(null); }}>
+            Export as CSV
+          </MenuItem>
+          <MenuItem onClick={() => { handleExport('json'); setAnchorEl(null); }}>
+            Export as JSON
+          </MenuItem>
+          <MenuItem onClick={() => { handleExport('excel'); setAnchorEl(null); }}>
+            Export as Excel
+          </MenuItem>
+        </Menu>
+
+        {/* Visualization Controls */}
+        {messages.some(m => m.type === 'results') && (
+          <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+            <IconButton 
+              color={visualizationType === 'bar' ? 'primary' : 'default'}
+              onClick={() => setVisualizationType('bar')}
+            >
+              <BarChartIcon />
+            </IconButton>
+            <IconButton 
+              color={visualizationType === 'pie' ? 'primary' : 'default'}
+              onClick={() => setVisualizationType('pie')}
+            >
+              <PieChartIcon />
+            </IconButton>
+            <IconButton 
+              color={visualizationType === 'line' ? 'primary' : 'default'}
+              onClick={() => setVisualizationType('line')}
+            >
+              <LineChartIcon />
+            </IconButton>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }

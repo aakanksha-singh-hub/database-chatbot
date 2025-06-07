@@ -83,10 +83,14 @@ async def process_query(request: QueryRequest):
         # Get analysis
         analysis = chatbot.analyze_data(results_df)
         
+        # Get suggestions based on the current context
+        suggestions = chatbot.get_suggested_queries()
+        
         return {
             "sql": sql_query,
             "results": results,
-            "analysis": analysis
+            "analysis": analysis,
+            "suggestions": suggestions
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
