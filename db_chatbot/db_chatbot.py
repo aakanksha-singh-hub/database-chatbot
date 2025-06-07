@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, text
 import urllib.parse
 import warnings
 import time
-from advanced_queries import NATURAL_LANGUAGE_EXAMPLES
+from .advanced_queries import NATURAL_LANGUAGE_EXAMPLES
 
 # Load environment variables from .env file
 load_dotenv()

@@ -16,6 +16,8 @@ from openai import AzureOpenAI
 import math
 import numpy as np
 from db_chatbot import DatabaseChatbot
+import uvicorn
+import httpx
 
 # Load environment variables
 load_dotenv()
@@ -25,11 +27,10 @@ app = FastAPI(title="Database Chatbot API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React development server
+    allow_origins=["http://localhost:3000"],  # React app URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"]
 )
 
 # Database connection settings
@@ -62,6 +63,9 @@ client = AzureOpenAI(
 connection_url = f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(AZURE_SQL_CONNECTION_STRING)}"
 engine = create_engine(connection_url)
 
+# Initialize chatbot
+chatbot = DatabaseChatbot()
+
 # Models
 class QueryRequest(BaseModel):
     query: str
@@ -71,6 +75,11 @@ class ConnectionRequest(BaseModel):
     database: str
     username: str
     password: str
+
+class QueryResponse(BaseModel):
+    sql: str
+    results: Any
+    analysis: str
 
 # Helper functions
 def get_schema_info() -> str:
@@ -223,30 +232,25 @@ async def get_schema():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/query")
+@app.post("/query", response_model=QueryResponse)
 async def process_query(request: QueryRequest):
     """Process natural language query and return SQL results and analysis."""
     try:
-        data = await request.json()
-        query = data.get("query")
-        if not query:
-            raise HTTPException(status_code=400, detail="Query is required")
+        # Process the query using the chatbot
+        sql_query = chatbot.generate_sql_query(request.query)
+        results = chatbot.execute_query(sql_query)
         
-        # Process query and get results
-        results_df, sql_query, analysis = chatbot.process_query(query)
+        if results is None or results.empty:
+            raise HTTPException(status_code=404, detail="No results found")
         
-        # Handle NaN values in DataFrame using numpy
-        results_df = results_df.replace([np.inf, -np.inf], np.nan)
-        results_df = results_df.fillna(None)
+        # Generate analysis
+        analysis = chatbot.analyze_data(results)
         
-        # Convert to dict
-        results_dict = results_df.to_dict(orient='records')
-        
-        return {
-            "results": results_dict,
-            "sql_query": sql_query,
-            "analysis": analysis
-        }
+        return QueryResponse(
+            sql=sql_query,
+            results=results.to_dict('records'),
+            analysis=analysis
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -287,54 +291,27 @@ async def get_sample_data(table_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/export")
+@app.get("/export/{format}")
 async def export_data(format: str):
     """Export the last query results in the specified format."""
     try:
-        # Get the last query results from the session
-        last_results = None
-        for msg in reversed(app.state.chat_memory if hasattr(app.state, 'chat_memory') else []):
-            if msg.get('type') == 'results':
-                last_results = msg['data']
-                break
-        
+        # Get the last query results
+        last_results = chatbot.get_last_results()
         if not last_results:
-            raise HTTPException(status_code=404, detail="No query results available for export")
-        
-        # Convert to DataFrame
-        df = pd.DataFrame(last_results)
+            raise HTTPException(status_code=404, detail="No results available for export")
         
         # Export based on format
         if format == 'csv':
-            output = StringIO()
-            df.to_csv(output, index=False)
             return Response(
-                content=output.getvalue(),
+                content=last_results.to_csv(index=False),
                 media_type="text/csv",
-                headers={
-                    "Content-Disposition": f"attachment; filename=query-results.csv",
-                    "Access-Control-Expose-Headers": "Content-Disposition"
-                }
+                headers={"Content-Disposition": f"attachment; filename=query-results.csv"}
             )
         elif format == 'json':
             return Response(
-                content=df.to_json(orient='records'),
+                content=last_results.to_json(orient='records'),
                 media_type="application/json",
-                headers={
-                    "Content-Disposition": f"attachment; filename=query-results.json",
-                    "Access-Control-Expose-Headers": "Content-Disposition"
-                }
-            )
-        elif format == 'excel':
-            output = StringIO()
-            df.to_excel(output, index=False)
-            return Response(
-                content=output.getvalue(),
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={
-                    "Content-Disposition": f"attachment; filename=query-results.xlsx",
-                    "Access-Control-Expose-Headers": "Content-Disposition"
-                }
+                headers={"Content-Disposition": f"attachment; filename=query-results.json"}
             )
         else:
             raise HTTPException(status_code=400, detail="Unsupported export format")
@@ -342,5 +319,4 @@ async def export_data(format: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001) 
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 

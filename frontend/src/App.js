@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Container, 
   Paper, 
@@ -13,16 +13,21 @@ import {
   List,
   ListItem,
   ListItemText,
-  Divider
+  Divider,
+  ThemeProvider,
+  createTheme,
+  CssBaseline
 } from '@mui/material';
 import { Send as SendIcon, History as HistoryIcon, Save as SaveIcon } from '@mui/icons-material';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { docco } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import axios from 'axios';
+import ChatWindow from './components/ChatWindow';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 function App() {
+  const [mode, setMode] = useState('light');
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -36,6 +41,44 @@ function App() {
     "Sales by month",
     "List low-stock products"
   ];
+
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode,
+          ...(mode === 'light'
+            ? {
+                primary: {
+                  main: '#1976d2',
+                },
+                background: {
+                  default: '#f5f5f5',
+                  paper: '#ffffff',
+                },
+              }
+            : {
+                primary: {
+                  main: '#90caf9',
+                },
+                background: {
+                  default: '#121212',
+                  paper: '#1e1e1e',
+                },
+              }),
+        },
+        components: {
+          MuiPaper: {
+            styleOverrides: {
+              root: {
+                backgroundImage: 'none',
+              },
+            },
+          },
+        },
+      }),
+    [mode]
+  );
 
   useEffect(() => {
     // Fetch schema information on component mount
@@ -158,95 +201,12 @@ function App() {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Database Chatbot
-      </Typography>
-
-      {/* Schema Information */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Available Tables
-        </Typography>
-        {schemaInfo ? (
-          <Typography component="pre" sx={{ 
-            overflowX: 'auto', 
-            whiteSpace: 'pre-wrap',
-            wordWrap: 'break-word',
-            fontFamily: 'monospace'
-          }}>
-            {schemaInfo}
-          </Typography>
-        ) : (
-          <CircularProgress size={20} />
-        )}
-      </Paper>
-
-      {/* Preset Queries */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Quick Queries
-        </Typography>
-        <List>
-          {presetQueries.map((preset, index) => (
-            <ListItem key={index} button onClick={() => setQuery(preset)}>
-              <ListItemText primary={preset} />
-            </ListItem>
-          ))}
-        </List>
-      </Paper>
-
-      {/* Chat Interface */}
-      <Paper sx={{ p: 2, mb: 2, height: '60vh', overflow: 'auto' }}>
-        {messages.map((message, index) => (
-          <div key={index}>{renderMessage(message)}</div>
-        ))}
-        <div ref={messagesEndRef} />
-      </Paper>
-
-      {/* Input Area */}
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Ask a question about your data..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleQuery()}
-          disabled={loading}
-        />
-        <IconButton 
-          color="primary" 
-          onClick={handleQuery}
-          disabled={loading || !query.trim()}
-        >
-          {loading ? <CircularProgress size={24} /> : <SendIcon />}
-        </IconButton>
-        <IconButton
-          color="primary"
-          onClick={(e) => setAnchorEl(e.currentTarget)}
-        >
-          <SaveIcon />
-        </IconButton>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <ChatWindow />
       </Box>
-
-      {/* Export Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={() => setAnchorEl(null)}
-      >
-        <MenuItem onClick={() => { handleExport('csv'); setAnchorEl(null); }}>
-          Export as CSV
-        </MenuItem>
-        <MenuItem onClick={() => { handleExport('json'); setAnchorEl(null); }}>
-          Export as JSON
-        </MenuItem>
-        <MenuItem onClick={() => { handleExport('excel'); setAnchorEl(null); }}>
-          Export as Excel
-        </MenuItem>
-      </Menu>
-    </Container>
+    </ThemeProvider>
   );
 }
 
