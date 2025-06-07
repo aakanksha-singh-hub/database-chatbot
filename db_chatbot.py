@@ -45,6 +45,15 @@ class ChatMemory:
     def __init__(self, max_turns: int = 10):
         self.max_turns = max_turns
         self.conversation_history: List[Dict[str, Any]] = []
+        self.current_context = {
+            'last_topic': None,
+            'last_department': None,
+            'last_metric': None,
+            'last_query': None,
+            'last_results': None,
+            'last_analysis': None,
+            'query_history': []
+        }
         
     def add_message(self, role: str, content: str, metadata: Optional[Dict[str, Any]] = None):
         message = {
@@ -54,14 +63,46 @@ class ChatMemory:
             "metadata": metadata or {}
         }
         self.conversation_history.append(message)
-        if len(self.conversation_history) > self.max_turns * 2:  # *2 because each turn has user and assistant messages
+        
+        # Update context based on message content and metadata
+        if role == 'user':
+            self.current_context['last_query'] = content
+            self.current_context['query_history'].append(content)
+            if len(self.current_context['query_history']) > self.max_turns:
+                self.current_context['query_history'] = self.current_context['query_history'][-self.max_turns:]
+        
+        if metadata:
+            if 'results' in metadata:
+                self.current_context['last_results'] = metadata['results']
+            if 'analysis' in metadata:
+                self.current_context['last_analysis'] = metadata['analysis']
+            if 'topic' in metadata:
+                self.current_context['last_topic'] = metadata['topic']
+            if 'department' in metadata:
+                self.current_context['last_department'] = metadata['department']
+            if 'metric' in metadata:
+                self.current_context['last_metric'] = metadata['metric']
+        
+        if len(self.conversation_history) > self.max_turns * 2:
             self.conversation_history = self.conversation_history[-self.max_turns*2:]
     
     def get_context(self) -> List[Dict[str, Any]]:
         return self.conversation_history
     
+    def get_current_context(self) -> Dict[str, Any]:
+        return self.current_context
+    
     def clear(self):
         self.conversation_history = []
+        self.current_context = {
+            'last_topic': None,
+            'last_department': None,
+            'last_metric': None,
+            'last_query': None,
+            'last_results': None,
+            'last_analysis': None,
+            'query_history': []
+        }
 
     def get_formatted_history(self) -> str:
         return "\n".join([
@@ -81,6 +122,7 @@ class DatabaseChatbot:
             'last_metric': None,
             'query_history': []
         }
+        self.chat_memory = ChatMemory()
         self.initialize_database()
         print("Database Chatbot initialized successfully!")
         self.print_help()
@@ -154,69 +196,91 @@ class DatabaseChatbot:
         suggestions = []
         
         # Get current context
-        last_topic = self.conversation_context['last_topic']
-        last_department = self.conversation_context['last_department']
-        last_metric = self.conversation_context['last_metric']
+        context = self.chat_memory.get_current_context()
+        last_topic = context.get('last_topic')
+        last_department = context.get('last_department')
+        last_metric = context.get('last_metric')
+        last_query = context.get('last_query', '')
+        recent_queries = context.get('query_history', [])
+        
+        # Default suggestions if no context
+        default_suggestions = [
+            "Show me all employees",
+            "What are the top 5 highest paid employees?",
+            "How many employees are in each department?",
+            "Show me project performance metrics",
+            "Analyze employee performance and contributions"
+        ]
+        
+        if not any([last_topic, last_department, last_metric]):
+            return [s for s in default_suggestions if s.lower() not in [q.lower() for q in recent_queries]]
         
         # 1. Department-based suggestions
-        if last_topic == 'department':
+        if last_topic == 'department' or last_department:
             if last_department:
                 # Specific department suggestions
-                suggestions.extend([
+                dept_suggestions = [
                     f"Show me the top performers in {last_department}",
                     f"What is the average salary in {last_department}?",
                     f"List all employees in {last_department} by performance score",
                     f"Show me the skills distribution in {last_department}",
                     f"Compare {last_department} performance with other departments"
-                ])
+                ]
+                suggestions.extend([s for s in dept_suggestions if s.lower() not in [q.lower() for q in recent_queries]])
+            
             # General department suggestions
-            suggestions.extend([
+            general_dept_suggestions = [
                 "Compare department performance metrics",
                 "Show me department-wise salary distribution",
                 "Which department has the highest average performance?",
                 "Show me the largest department by employee count",
                 "Compare department hiring trends"
-            ])
+            ]
+            suggestions.extend([s for s in general_dept_suggestions if s.lower() not in [q.lower() for q in recent_queries]])
         
         # 2. Salary-based suggestions
-        if last_metric == 'salary':
-            suggestions.extend([
+        if last_metric == 'salary' or 'salary' in last_query.lower():
+            salary_suggestions = [
                 "Show me salary trends over time",
                 "Compare salaries across departments",
                 "Who are the top 5 highest paid employees?",
                 "Show me the salary distribution by department",
                 "What's the salary range in each department?"
-            ])
+            ]
+            suggestions.extend([s for s in salary_suggestions if s.lower() not in [q.lower() for q in recent_queries]])
         
         # 3. Performance-based suggestions
-        if last_metric == 'performance':
-            suggestions.extend([
+        if last_metric == 'performance' or 'performance' in last_query.lower():
+            performance_suggestions = [
                 "Show me performance trends over time",
                 "Compare performance across departments",
                 "Who are the top 5 performers?",
                 "Show me the performance distribution",
                 "Which department has the most consistent performance?"
-            ])
+            ]
+            suggestions.extend([s for s in performance_suggestions if s.lower() not in [q.lower() for q in recent_queries]])
         
         # 4. Skills-based suggestions
-        if last_topic == 'skills':
-            suggestions.extend([
+        if last_topic == 'skills' or 'skills' in last_query.lower():
+            skills_suggestions = [
                 "Show me employees with specific skills",
                 "What are the most common skills?",
                 "Which skills are associated with higher salaries?",
                 "Show me skill distribution by department",
                 "Which skills are most common in top performers?"
-            ])
+            ]
+            suggestions.extend([s for s in skills_suggestions if s.lower() not in [q.lower() for q in recent_queries]])
         
         # 5. Time-based suggestions
-        if 'doj' in self.last_query.lower() or 'trend' in self.last_query.lower():
-            suggestions.extend([
+        if last_topic == 'time' or any(word in last_query.lower() for word in ['trend', 'time', 'year', 'month', 'date']):
+            time_suggestions = [
                 "Show me hiring trends by department",
                 "Compare hiring patterns across years",
                 "Show me employee retention rates",
                 "Which department has grown the most?",
                 "Show me the average tenure by department"
-            ])
+            ]
+            suggestions.extend([s for s in time_suggestions if s.lower() not in [q.lower() for q in recent_queries]])
         
         # 6. General suggestions (always included)
         general_suggestions = [
@@ -229,7 +293,11 @@ class DatabaseChatbot:
         
         # Add general suggestions if we don't have enough context-specific ones
         if len(suggestions) < 3:
-            suggestions.extend(general_suggestions)
+            suggestions.extend([s for s in general_suggestions if s.lower() not in [q.lower() for q in recent_queries]])
+        
+        # If we still don't have enough suggestions, add from default suggestions
+        if len(suggestions) < 3:
+            suggestions.extend([s for s in default_suggestions if s.lower() not in [q.lower() for q in recent_queries]])
         
         # Remove duplicates and limit to 5 suggestions
         suggestions = list(dict.fromkeys(suggestions))[:5]
@@ -273,12 +341,13 @@ class DatabaseChatbot:
                 return
             
             if query.lower() == 'context':
+                context = self.chat_memory.get_current_context()
                 print("\nCurrent Conversation Context:")
-                print(f"Last Topic: {self.conversation_context['last_topic']}")
-                print(f"Last Department: {self.conversation_context['last_department']}")
-                print(f"Last Metric: {self.conversation_context['last_metric']}")
+                print(f"Last Topic: {context['last_topic']}")
+                print(f"Last Department: {context['last_department']}")
+                print(f"Last Metric: {context['last_metric']}")
                 print("\nRecent Queries:")
-                for q in self.conversation_context['query_history'][-3:]:
+                for q in context['query_history'][-3:]:
                     print(f"- {q}")
                 return
             
@@ -288,11 +357,17 @@ class DatabaseChatbot:
                     print(f"{i}. {suggestion}")
                 return
             
+            # Add user query to memory
+            self.chat_memory.add_message('user', query)
+            
             # Generate and execute SQL query
             sql_query = self.generate_sql_query(query)
             results = self.execute_query(sql_query)
             
             if results is not None and not results.empty:
+                # Add SQL query to memory
+                self.chat_memory.add_message('assistant', sql_query, {'type': 'sql'})
+                
                 print("\nQuery Results:")
                 print(results)
                 
@@ -301,12 +376,23 @@ class DatabaseChatbot:
                 print("\nAnalysis:")
                 print(analysis)
                 
+                # Add results and analysis to memory with metadata
+                self.chat_memory.add_message('assistant', str(results), {
+                    'type': 'results',
+                    'data': results.to_dict('records'),
+                    'topic': self.extract_topic(query),
+                    'department': self.extract_department(query),
+                    'metric': self.extract_metric(query)
+                })
+                
+                self.chat_memory.add_message('assistant', analysis, {
+                    'type': 'analysis',
+                    'data': analysis
+                })
+                
                 # Generate visualizations
                 viz_message = self.visualize_data(results)
                 print("\n" + viz_message)
-                
-                # Update context
-                self.update_conversation_context(query, analysis)
                 
                 # Provide follow-up suggestions
                 print("\nYou might also want to know:")
@@ -315,6 +401,46 @@ class DatabaseChatbot:
             
         except Exception as e:
             self.handle_error(e, query)
+
+    def extract_topic(self, query: str) -> Optional[str]:
+        """Extract the main topic from a query."""
+        query = query.lower()
+        topics = {
+            'department': ['department', 'dept'],
+            'salary': ['salary', 'paid', 'compensation'],
+            'performance': ['performance', 'score', 'rating'],
+            'skills': ['skills', 'expertise', 'capabilities'],
+            'time': ['trend', 'time', 'year', 'month', 'date']
+        }
+        
+        for topic, keywords in topics.items():
+            if any(keyword in query for keyword in keywords):
+                return topic
+        return None
+        
+    def extract_department(self, query: str) -> Optional[str]:
+        """Extract department from a query."""
+        query = query.lower()
+        departments = ['engineering', 'sales', 'marketing', 'hr', 'finance']
+        for dept in departments:
+            if dept in query:
+                return dept
+        return None
+        
+    def extract_metric(self, query: str) -> Optional[str]:
+        """Extract metric from a query."""
+        query = query.lower()
+        metrics = {
+            'salary': ['salary', 'paid', 'compensation'],
+            'performance': ['performance', 'score', 'rating'],
+            'count': ['count', 'number', 'how many'],
+            'average': ['average', 'mean', 'avg']
+        }
+        
+        for metric, keywords in metrics.items():
+            if any(keyword in query for keyword in keywords):
+                return metric
+        return None
 
     def initialize_database(self):
         """Initialize the database connection and test it."""
