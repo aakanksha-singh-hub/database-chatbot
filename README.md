@@ -1,51 +1,42 @@
-# Database Chatbot
+# QueryBot
 
-A powerful chatbot interface that allows users to query databases using natural language. Built with React, FastAPI, and Azure OpenAI.
+A modern, production-ready GenAI SQL chatbot platform that enables users to query structured databases using natural language. QueryBot removes the technical barrier of writing SQL and allows anyone to interact with data conversationally and securely.
+
+---
 
 ## Features
 
-### Core Features
-- 🧠 Natural Language to SQL Conversion
-  - Input box for plain language queries
-  - Azure OpenAI-powered query-to-SQL conversion
-  - Real-time execution on Azure SQL Database
-  - Human-readable results display
-  - Shows original query, generated SQL, and results
+- **Natural Language to SQL**: Ask questions in plain English, get instant SQL and results.
+- **Azure OpenAI Integration**: Uses GPT-4 for accurate NL-to-SQL translation.
+- **Azure SQL Database**: Secure, enterprise-grade data storage.
+- **Conversational Chat UI**: Multi-turn, context-aware chat interface.
+- **Database Explorer**: Connect, browse tables, view schema, and preview data.
+- **Export & Visualization**: Download results (CSV, Excel, JSON) and view charts.
+- **Light/Dark Mode**: Beautiful, accessible UI for all users.
+- **Security**: Credentials handled securely, no password logging, read-only queries.
 
-- 💬 Conversational Follow-up
-  - Maintains context of previous queries
-  - Supports drill-down and refinement
-  - Chat-like interface for multi-turn interaction
-  - Smart suggestion system that avoids duplicate queries
-  - Context-aware follow-up recommendations
+---
 
-- 📊 Dataset Awareness
-  - Schema preview
-  - Preset query buttons
-  - Export functionality (CSV, Excel, JSON)
-  - Dynamic visualization generation
-  - Comprehensive data analysis
+## Tech Stack
 
-### Conversation Features
-- 🔄 Context Management
-  - Tracks conversation history
-  - Maintains query context
-  - Remembers previous topics and metrics
-  - Smart suggestion filtering
-  - Department and metric tracking
+| Layer      | Technology/Library         | Purpose                                 |
+|------------|---------------------------|-----------------------------------------|
+| Frontend   | React                     | UI framework                            |
+|            | Material UI (MUI)         | UI components, theming, icons           |
+|            | React Router              | Routing/navigation                      |
+|            | Chart.js, Recharts        | Data visualizations                     |
+|            | Custom CSS                | Additional styling                      |
+| Backend    | FastAPI                   | REST API framework                      |
+|            | SQLAlchemy                | Database connection/ORM                 |
+|            | Pandas                    | Data manipulation                       |
+|            | Azure OpenAI (GPT-4)      | NL-to-SQL translation                   |
+|            | Azure SQL Database        | Data storage                            |
+|            | Uvicorn                   | ASGI server                             |
+| DevOps     | Docker                    | Containerization                        |
+|            | dotenv                    | Env variable management                 |
+|            | CORS Middleware           | Secure API access                       |
 
-- 💡 Smart Suggestions
-  - Context-aware query recommendations
-  - Non-repetitive suggestions
-  - Topic-based follow-ups
-  - Department-specific queries
-  - Metric-focused analysis options
-
-### Security Features
-- SQL Injection Prevention
-- Sensitive Data Masking
-- Azure Managed Identity Support
-- Environment Variable Configuration
+---
 
 ## Setup
 
@@ -55,102 +46,92 @@ A powerful chatbot interface that allows users to query databases using natural 
 - Azure SQL Database
 - Azure OpenAI Service
 
-### Backend Setup
-1. Create a `.env` file in the root directory with the following variables:
-   ```
-   AZURE_SQL_CONNECTION_STRING=your_connection_string
-   AZURE_OPENAI_API_KEY=your_api_key
-   AZURE_OPENAI_VERSION=2024-02-15-preview
-   AZURE_OPENAI_DEPLOYMENT=your_deployment_name
-   AZURE_OPENAI_ENDPOINT=your_endpoint
-   ```
-
+### Backend
+1. Create a `.env` file with your Azure SQL and OpenAI credentials.
 2. Install Python dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-
-3. Start the FastAPI backend:
+3. Start the backend:
    ```bash
-   python backend.py
+   uvicorn backend.main:app --reload
    ```
 
-### Frontend Setup
+### Frontend
 1. Navigate to the frontend directory:
    ```bash
    cd frontend
    ```
-
 2. Install dependencies:
    ```bash
    npm install
    ```
-
-3. Start the development server:
+3. Start the frontend:
    ```bash
    npm start
    ```
 
+---
+
 ## Usage
 
-1. Open your browser to `http://localhost:3000`
-2. View available tables in the schema section
-3. Use preset queries or type your own natural language query
-4. View results, generated SQL, and analysis
-5. Use the 'suggest' command to get context-aware query suggestions
-6. Use the 'context' command to view current conversation context
+1. Go to `http://localhost:3000`
+2. Click **Connect** to enter your Azure SQL credentials.
+3. Explore your dataset, view schemas, and preview data.
+4. Go to **Chat** and ask questions in natural language.
+5. View results in a table and as visualizations.
+6. Export results as CSV, Excel, or JSON.
 
-### Example Queries
-- "Show me all employees"
-- "What are the top 5 highest paid employees?"
-- "How many employees are in each department?"
-- "Show me project performance metrics"
-- "Analyze employee performance and contributions"
+---
 
-### Available Commands
-- `help`: Show help message
-- `context`: Show current conversation context
-- `suggest`: Get query suggestions based on current context
-- `export <format>`: Export results (formats: csv, sql, excel, json)
-- `quit`: Exit the program
+## Sample Queries
 
-## Security Considerations
+| Natural Language Input                  | SQL Translation                                                                                   |
+|-----------------------------------------|---------------------------------------------------------------------------------------------------|
+| List all departments                    | `SELECT DISTINCT department FROM employees;`                                                      |
+| Top 5 products by sales in 2023         | `SELECT TOP 5 product_name, SUM(sales) FROM orders WHERE YEAR(order_date) = 2023 GROUP BY product_name ORDER BY SUM(sales) DESC;` |
+| Average salary by department            | `SELECT department, AVG(salary) FROM employees GROUP BY department;`                              |
+| Show total revenue per year             | `SELECT YEAR(order_date), SUM(revenue) FROM sales GROUP BY YEAR(order_date);`                     |
 
-- All database credentials are stored in environment variables
-- SQL queries are validated before execution
-- Sensitive data is masked in results
-- CORS is configured for security
+---
 
-## Development
+## Prompting Tips
 
-### Project Structure
-```
-.
-├── backend.py           # FastAPI backend
-├── db_chatbot.py       # Core chatbot logic
-├── frontend/           # React frontend
-│   ├── src/
-│   │   ├── App.js     # Main React component
-│   │   └── ...
-│   └── package.json
-├── requirements.txt    # Python dependencies
-└── .env               # Environment variables
-```
+- **Be specific:** Include table or column names when possible.
+- **Use filters:** e.g., "Employees with salary over 70000 in Marketing."
+- **Avoid vague phrasing:** General inputs like "Show me something interesting" may not yield usable results.
 
-### Adding New Features
-1. Backend: Add new endpoints in `backend.py`
-2. Frontend: Create new components in `frontend/src`
-3. Core Logic: Extend `DatabaseChatbot` class in `db_chatbot.py`
+---
 
-## Contributing
-Feel free to submit issues and enhancement requests!
+## Limitations
+
+- May struggle with vague or highly contextual queries.
+- Only read operations are permitted (no updates/deletes).
+- SQL errors are caught and shown gracefully, but complex queries may require refinement.
+- Sensitive data masking is not yet implemented.
+
+---
+
+## Reflections
+
+See [REFLECTIONS.md](./REFLECTIONS.md) for a detailed write-up.
+
+**Summary:**
+- GenAI (GPT-4) can accurately translate natural language to SQL, especially when grounded with schema and context.
+- Prompt engineering and schema-awareness are essential for reliable results.
+- Robust error handling and a clean UI are key for user trust and adoption.
+
+---
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License
+
+---
 
 ## Acknowledgments
 
 - Azure OpenAI Service
 - Azure SQL Database
-- Python Data Science Stack (pandas, numpy, matplotlib, seaborn) 
+- Python Data Science Stack (pandas, numpy)
+- Material UI & React Community 

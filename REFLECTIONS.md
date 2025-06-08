@@ -1,0 +1,34 @@
+# Reflections: QueryBot
+
+## What did we learn about Generative AI?
+
+- **Capabilities:**
+  - GenAI (GPT-4) can accurately translate natural language to SQL, especially when grounded with schema and context.
+  - Enables non-technical users to access and analyze data with ease.
+- **Limitations:**
+  - Struggles with ambiguous, vague, or highly contextual queries.
+  - Prompt engineering and schema-awareness are essential for reliable results.
+
+## Challenges & Solutions
+
+| Challenge                                 | Solution                                                      |
+|--------------------------------------------|---------------------------------------------------------------|
+| Mapping vague queries to correct SQL       | Table-aware prompting and auto-suggestions                    |
+| Handling runtime SQL errors                | TRY-CATCH SQL wrapper and safe failure messages               |
+| Secure Azure SQL connection                | Environment-level access configuration, scoped credentials    |
+| Designing an intuitive interface           | Modern React + MUI, responsive design, clear feedback         |
+
+## Most Valuable Tools & Concepts
+
+- **Prompt Engineering:** Crafting clear, schema-aware prompts for GPT-4.
+- **FastAPI & React:** Rapid, scalable development for backend and frontend.
+- **Material UI:** Consistent, beautiful, and accessible UI components.
+- **Session Management:** Secure handling of credentials and user state.
+- **Error Handling:** Robust feedback for both backend and frontend errors.
+
+## What would we do next?
+
+- Add more advanced visualizations and export options.
+- Implement user authentication and role-based access.
+- Add data masking and SQL validation for even greater security.
+- Enable session-based query history and refinement. 
