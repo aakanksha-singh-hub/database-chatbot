@@ -2,10 +2,10 @@
 
 ## What did we learn about Generative AI?
 
-- **Capabilities:**
+- Capabilities:
   - GenAI (GPT-4) can accurately translate natural language to SQL, especially when grounded with schema and context.
   - Enables non-technical users to access and analyze data with ease.
-- **Limitations:**
+- Limitations:
   - Struggles with ambiguous, vague, or highly contextual queries.
   - Prompt engineering and schema-awareness are essential for reliable results.
 
@@ -20,11 +20,11 @@
 
 ## Most Valuable Tools & Concepts
 
-- **Prompt Engineering:** Crafting clear, schema-aware prompts for GPT-4.
-- **FastAPI & React:** Rapid, scalable development for backend and frontend.
-- **Material UI:** Consistent, beautiful, and accessible UI components.
-- **Session Management:** Secure handling of credentials and user state.
-- **Error Handling:** Robust feedback for both backend and frontend errors.
+- Prompt Engineering: Crafting clear, schema-aware prompts for GPT-4.
+- FastAPI & React: Rapid, scalable development for backend and frontend.
+- Material UI: Consistent, beautiful, and accessible UI components.
+- Session Management: Secure handling of credentials and user state.
+- Error Handling: Robust feedback for both backend and frontend errors.
 
 ## What would we do next?
 
