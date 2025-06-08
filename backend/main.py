@@ -33,7 +33,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",  # Local development
         "https://*.vercel.app",   # Vercel preview deployments
-        "https://querybot.vercel.app"  # Your production domain
+        "https://querybot.vercel.app",  # Your main Vercel production domain
+        "https://querybot-frontend-new.vercel.app" # Explicitly added Vercel URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
