@@ -30,7 +30,11 @@ app = FastAPI(title="Database Chatbot API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React app URL
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "https://*.vercel.app",   # Vercel preview deployments
+        "https://querybot.vercel.app"  # Your production domain
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
