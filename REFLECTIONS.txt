@@ -11,7 +11,7 @@
 
 ## Challenges & Solutions
 
-| Challenge                                 | Solution                                                      |
+| Challenge                                  | Solution                                                      |
 |--------------------------------------------|---------------------------------------------------------------|
 | Mapping vague queries to correct SQL       | Table-aware prompting and auto-suggestions                    |
 | Handling runtime SQL errors                | TRY-CATCH SQL wrapper and safe failure messages               |
