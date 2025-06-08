@@ -14,6 +14,9 @@ import Chat from './components/Chat';
 import AboutPage from './components/AboutPage';
 import ConnectPage from './components/ConnectPage';
 
+// This comment is added to force GitHub to re-index the frontend directory.
+// It can be removed later if desired.
+
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
