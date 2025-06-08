@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Container, Box, Typography, TextField, Button, Paper, Alert, Snackbar, InputAdornment, IconButton } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 
 const ConnectPage = () => {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ server: '', database: '', username: '', password: '' });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -27,10 +29,28 @@ const ConnectPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validate()) {
+      // Still validate inputs for a clean demo, but don't proceed with fake success if validation fails
+      return;
+    }
+
     setLoading(true);
     setErrorMsg('');
     setSuccess(false);
+
+    // --- START: DEMO ONLY CODE (DO NOT PUSH TO GITHUB) ---
+    // Simulate a successful connection instantly for local demo purposes.
+    // This bypasses the actual fetch call to your backend.
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate a small delay
+    sessionStorage.setItem('db_connected', 'true');
+    sessionStorage.setItem('db_name', form.database);
+    setSuccess(true);
+    setLoading(false);
+    navigate('/chat'); // Navigate to chat page after success
+    // --- END: DEMO ONLY CODE ---
+
+    /*
+    // --- ORIGINAL CODE (UNCOMMENT THIS AND DELETE DEMO CODE TO REVERT FOR PRODUCTION) ---
     try {
       // Call backend to test connection (replace with your backend route)
       const response = await fetch('/api/connect', {
@@ -51,6 +71,8 @@ const ConnectPage = () => {
     } finally {
       setLoading(false);
     }
+    // --- END ORIGINAL CODE ---
+    */
   };
 
   return (

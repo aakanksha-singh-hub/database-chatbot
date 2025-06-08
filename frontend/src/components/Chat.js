@@ -102,6 +102,139 @@ function Chat() {
     const userMessage = { type: 'user', content: query };
     setMessages(prev => [...prev, userMessage]);
 
+    // --- START: DEMO ONLY CODE (DO NOT PUSH TO GITHUB) ---
+    if (query.toLowerCase() === "performance score trend") {
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate loading
+      const dummyResults = [
+        { Period: 'Jan-Mar', 'Performance Score': 3.5 },
+        { Period: 'Apr-Jun', 'Performance Score': 3.8 },
+        { Period: 'Jul-Sep', 'Performance Score': 4.0 },
+        { Period: 'Oct-Dec', 'Performance Score': 4.2 },
+        { Period: 'Jan-Mar 2025', 'Performance Score': 4.5 },
+      ];
+      setMessages(prev => [
+        ...prev,
+        { type: 'sql', content: `-- Simulated SQL for: performance score trend` },
+        { type: 'results', content: dummyResults },
+        { type: 'analysis', content: 'Simulated analysis: Performance scores show a positive upward trend over the recent periods.' }
+      ]);
+      setVisualizationType('line'); // Force line chart
+      setLoading(false);
+      setQuery('');
+      return; // Exit here to prevent backend call
+    } else if (query.toLowerCase() === "how many employees in each department") {
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate loading
+      const dummyResults = [
+        { Department: 'Sales', 'Employee Count': 150 },
+        { Department: 'Marketing', 'Employee Count': 80 },
+        { Department: 'Engineering', 'Employee Count': 220 },
+        { Department: 'HR', 'Employee Count': 50 },
+        { Department: 'Finance', 'Employee Count': 100 },
+      ];
+      setMessages(prev => [
+        ...prev,
+        { type: 'sql', content: `-- Simulated SQL for: how many employees in each department` },
+        { type: 'results', content: dummyResults },
+        { type: 'analysis', content: 'Simulated analysis: This bar chart shows the distribution of employees across different departments.' }
+      ]);
+      setVisualizationType('bar'); // Force bar chart
+      setLoading(false);
+      setQuery('');
+      return; // Exit here to prevent backend call
+    } else if (query.toLowerCase() === "what is the average salary") {
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate loading
+      const dummyResults = [
+        { 'Department': 'Finance', 'Average Salary': 76500 },
+        { 'Department': 'Human Resources', 'Average Salary': 65000 },
+        { 'Department': 'IT', 'Average Salary': 85000 },
+        { 'Department': 'Marketing', 'Average Salary': 70000 },
+        { 'Department': 'Sales', 'Average Salary': 95000 },
+        { 'Department': 'Research', 'Average Salary': 82000 },
+      ];
+      setMessages(prev => [
+        ...prev,
+        { type: 'sql', content: `-- Simulated SQL for: what is the average salary` },
+        { type: 'results', content: dummyResults },
+        { type: 'analysis', content: 'Simulated analysis: Average salaries across various departments.' }
+      ]);
+      setVisualizationType('bar'); // Force bar chart
+      setLoading(false);
+      setQuery('');
+      return; // Exit here to prevent backend call
+    } else if (query.toLowerCase() === "show all employees") {
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate loading
+      const dummyResults = [
+        { id: 1, name: 'John Doe', department: 'Finance', salary: 75000 },
+        { id: 2, name: 'Jane Smith', department: 'HR', salary: 65000 },
+        { id: 3, name: 'Alice Johnson', department: 'IT', salary: 85000 },
+        { id: 4, name: 'Bob Brown', department: 'Marketing', salary: 70000 },
+        { id: 5, name: 'Carol White', department: 'Finance', salary: 78000 },
+      ];
+      setMessages(prev => [
+        ...prev,
+        { type: 'sql', content: `-- Simulated SQL for: show all employees` },
+        { type: 'results', content: dummyResults },
+        { type: 'analysis', content: 'Simulated analysis: Displaying all available employee records.' }
+      ]);
+      setVisualizationType(null); // Let it default to table or keep current visualization
+      setLoading(false);
+      setQuery('');
+      return; // Exit here to prevent backend call
+    } else if (query.toLowerCase() === "what are the top 5 highest paid employees?") {
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate loading
+      const dummyResults = [
+        { id: 1, name: 'Alice Johnson', salary: 85000 },
+        { id: 2, name: 'Carol White', salary: 78000 },
+        { id: 3, name: 'John Doe', salary: 75000 },
+        { id: 4, name: 'Bob Brown', salary: 70000 },
+        { id: 5, name: 'Jane Smith', salary: 65000 },
+      ];
+      setMessages(prev => [
+        ...prev,
+        { type: 'sql', content: `-- Simulated SQL for: what are the top 5 highest paid employees?` },
+        { type: 'results', content: dummyResults },
+        { type: 'analysis', content: 'Simulated analysis: Here are the top 5 highest paid employees based on available data.' }
+      ]);
+      setVisualizationType(null); // Let it default to table
+      setLoading(false);
+      setQuery('');
+      return; // Exit here to prevent backend call
+    } else if (query.toLowerCase() === "show employees hired in 2020") {
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate loading
+      const dummyResults = [
+        { id: 1, name: 'John Doe', department: 'Finance', hire_date: '2020-01-15' },
+        { id: 4, name: 'Bob Brown', department: 'Marketing', hire_date: '2020-11-05' },
+      ];
+      setMessages(prev => [
+        ...prev,
+        { type: 'sql', content: `-- Simulated SQL for: show employees hired in 2020` },
+        { type: 'results', content: dummyResults },
+        { type: 'analysis', content: 'Simulated analysis: Displaying employees hired in 2020.' }
+      ]);
+      setVisualizationType(null); // Let it default to table
+      setLoading(false);
+      setQuery('');
+      return; // Exit here to prevent backend call
+    } else if (query.toLowerCase() === "list departments with more than 2 employees") {
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate loading
+      const dummyResults = [
+        { Department: 'Sales', 'Employee Count': 150 },
+        { Department: 'Engineering', 'Employee Count': 220 },
+        { Department: 'Finance', 'Employee Count': 100 },
+      ];
+      setMessages(prev => [
+        ...prev,
+        { type: 'sql', content: `-- Simulated SQL for: list departments with more than 2 employees` },
+        { type: 'results', content: dummyResults },
+        { type: 'analysis', content: 'Simulated analysis: Departments with a significant number of employees.' }
+      ]);
+      setVisualizationType('bar'); // Force bar chart for this
+      setLoading(false);
+      setQuery('');
+      return; // Exit here to prevent backend call
+    }
+    // --- END: DEMO ONLY CODE ---
+
     try {
       const response = await axios.post(`${API_URL}/api/query`, { query });
       const { sql, results, analysis } = response.data;
@@ -167,15 +300,28 @@ function Chat() {
     if (!Array.isArray(data) || data.length === 0) return null;
 
     const firstRow = data[0];
-    const numericColumns = Object.entries(firstRow)
-      .filter(([_, value]) => typeof value === 'number')
-      .map(([key]) => key);
+    let categoryColumn = null;
+    let valueColumn = null;
 
-    if (numericColumns.length < 2) return null;
+    // Find a suitable category (string) and value (number) column
+    for (const key in firstRow) {
+      if (typeof firstRow[key] === 'string' && !categoryColumn) {
+        categoryColumn = key;
+      } else if (typeof firstRow[key] === 'number' && !valueColumn) {
+        valueColumn = key;
+      }
+      // If both are found, break
+      if (categoryColumn && valueColumn) break;
+    }
+
+    if (!categoryColumn || !valueColumn) {
+      // If we don't have at least one category and one value column, we can't chart
+      return null;
+    }
 
     const chartData = data.map(row => ({
-      name: row[numericColumns[0]],
-      value: row[numericColumns[1]]
+      name: row[categoryColumn],
+      value: row[valueColumn]
     }));
 
     switch (visualizationType) {
