@@ -15,7 +15,8 @@ import {
   Grid,
   Card,
   CardContent,
-  Autocomplete
+  Autocomplete,
+  useTheme
 } from '@mui/material';
 import { 
   Send as SendIcon, 
@@ -46,18 +47,16 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const VALID_QUESTIONS = [
   "Show all employees",
-  "Top 5 products by sales",
-  "Sales by month",
-  "List low-stock products",
+  "What are the top 5 highest paid employees?",
+  "How many employees are in each department?",
   "What is the average salary?",
   "How many employees are in each department?",
-  "Show employees hired in the last year",
-  "List departments with more than 10 employees",
-  "Show total sales by region",
-  "Which products are out of stock?"
+  "Show employees hired in 2020",
+  "List departments with more than 2 employees",
 ];
 
 function Chat() {
+  const theme = useTheme();
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -104,7 +103,7 @@ function Chat() {
     setMessages(prev => [...prev, userMessage]);
 
     try {
-      const response = await axios.post(`${API_URL}/query`, { query });
+      const response = await axios.post(`${API_URL}/api/query`, { query });
       const { sql, results, analysis } = response.data;
       
       setMessages(prev => [
@@ -137,12 +136,21 @@ function Chat() {
   };
 
   const handleExport = async (format) => {
+    // Find the latest results message
+    const resultsMsg = messages.findLast(m => m.type === 'results');
+    if (!resultsMsg || !Array.isArray(resultsMsg.content)) {
+      alert('No results to export!');
+      return;
+    }
     try {
-      const response = await axios.get(`${API_URL}/export`, {
-        params: { format },
-        responseType: 'blob'
-      });
-      
+      const response = await axios.post(
+        `${API_URL}/api/export`,
+        {
+          data: resultsMsg.content,
+          format: format
+        },
+        { responseType: 'blob' }
+      );
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -226,7 +234,7 @@ function Chat() {
       case 'user':
         return (
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-            <Paper sx={{ p: 2, maxWidth: '70%', bgcolor: '#e3f2fd' }}>
+            <Paper sx={{ p: 2, maxWidth: '70%', bgcolor: theme.palette.background.paper }}>
               <Typography>{message.content}</Typography>
             </Paper>
           </Box>
@@ -234,7 +242,7 @@ function Chat() {
       case 'sql':
         return (
           <Box sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" color="text.secondary">Generated SQL:</Typography>
+            <Typography variant="subtitle2" color={theme.palette.text.secondary}>Generated SQL:</Typography>
             <SyntaxHighlighter language="sql" style={docco}>
               {message.content}
             </SyntaxHighlighter>
@@ -245,7 +253,28 @@ function Chat() {
           <Box sx={{ mb: 2 }}>
             <Typography variant="subtitle2" color="text.secondary">Results:</Typography>
             <Paper sx={{ p: 2, overflowX: 'auto' }}>
-              <pre>{JSON.stringify(message.content, null, 2)}</pre>
+              {Array.isArray(message.content) && message.content.length > 0 ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {Object.keys(message.content[0]).map((col) => (
+                        <th key={col} style={{ borderBottom: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {message.content.map((row, idx) => (
+                      <tr key={idx}>
+                        {Object.values(row).map((val, i) => (
+                          <td key={i} style={{ borderBottom: '1px solid #eee', padding: '8px' }}>{val}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <Typography color="text.secondary">No results found.</Typography>
+              )}
               {renderVisualization(message.content)}
             </Paper>
           </Box>
@@ -253,17 +282,17 @@ function Chat() {
       case 'analysis':
         return (
           <Box sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" color="text.secondary">Analysis:</Typography>
-            <Paper sx={{ p: 2 }}>
-              <Typography>{message.content}</Typography>
+            <Typography variant="subtitle2" color={theme.palette.text.secondary}>Analysis:</Typography>
+            <Paper sx={{ p: 2, bgcolor: theme.palette.background.paper }}>
+              <Typography className="analysis-section">{message.content}</Typography>
             </Paper>
           </Box>
         );
       case 'error':
         return (
           <Box sx={{ mb: 2 }}>
-            <Paper sx={{ p: 2, bgcolor: '#ffebee' }}>
-              <Typography color="error">{message.content}</Typography>
+            <Paper sx={{ p: 2, bgcolor: theme.palette.background.paper }}>
+              <Typography color={theme.palette.error.main}>{message.content}</Typography>
             </Paper>
           </Box>
         );
@@ -298,7 +327,7 @@ function Chat() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2 }}>
       {/* Suggestions Panel */}
-      <Paper sx={{ minWidth: 260, maxWidth: 300, p: 2, height: '80vh', overflowY: 'auto', mr: 2 }}>
+      <Paper sx={{ minWidth: 260, maxWidth: 300, p: 2, height: '80vh', overflowY: 'auto', mr: 2, bgcolor: theme.palette.background.paper }}>
         <Typography variant="h6" gutterBottom>Suggestions</Typography>
         <List>
           {contextSuggestions.length === 0 ? (
@@ -320,90 +349,69 @@ function Chat() {
         </Typography>
 
         {/* Schema Information */}
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Available Tables
-          </Typography>
-          {schemaInfo ? (
-            <Typography component="pre" sx={{ 
-              overflowX: 'auto', 
-              whiteSpace: 'pre-wrap',
-              wordWrap: 'break-word',
-              fontFamily: 'monospace'
-            }}>
-              {schemaInfo}
-            </Typography>
-          ) : (
-            <CircularProgress size={20} />
-          )}
-        </Paper>
-
+        {/* (Removed Available Tables section) */}
         {/* Quick Queries */}
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Quick Queries
-          </Typography>
-          <Grid container spacing={2}>
-            {presetQueries.map((preset, index) => (
-              <Grid item xs={12} sm={6} md={3} key={index}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      {preset}
-                    </Typography>
-                    <Button 
-                      size="small" 
-                      onClick={() => setQuery(preset)}
-                      sx={{ mt: 1 }}
-                    >
-                      Try it
-                    </Button>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
+        {/* (Removed Quick Queries section) */}
 
         {/* Chat Interface */}
-        <Paper sx={{ p: 2, mb: 2, height: '60vh', overflow: 'auto' }}>
+        <Paper sx={{ p: 2, mb: 2, height: '60vh', overflow: 'auto', bgcolor: theme.palette.background.paper }}>
           {messages.map((message, index) => (
             <div key={index}>{renderMessage(message)}</div>
           ))}
           <div ref={messagesEndRef} />
         </Paper>
 
-        {/* Input Area */}
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Autocomplete
-            freeSolo
-            options={suggestions}
-            inputValue={query}
-            onInputChange={handleInputChange}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                fullWidth
-                variant="outlined"
-                placeholder="Ask a question about your data..."
-                disabled={loading}
-              />
-            )}
-          />
-          <IconButton 
-            color="primary" 
-            onClick={handleQuery}
-            disabled={loading || !query.trim()}
-          >
-            {loading ? <CircularProgress size={24} /> : <SendIcon />}
-          </IconButton>
-          <IconButton
-            color="primary"
-            onClick={(e) => setAnchorEl(e.currentTarget)}
-          >
-            <SaveIcon />
-          </IconButton>
-        </Box>
+{/* Input Area */}
+<Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mt: 2, width: '100%' }}>
+  <Autocomplete
+    freeSolo
+    options={suggestions}
+    inputValue={query}
+    onInputChange={handleInputChange}
+    sx={{ flex: 1 }}
+    renderInput={(params) => (
+      <TextField
+        {...params}
+        fullWidth
+        variant="outlined"
+        placeholder="Ask a question about your data..."
+        disabled={loading}
+        multiline
+        minRows={3}
+        maxRows={6}
+        sx={{
+          width: '100%',
+          '& .MuiInputBase-root': {
+            alignItems: 'flex-start',
+            py: 2,
+          },
+          '& .MuiInputBase-input': {
+            fontSize: '1.25rem',
+            minHeight: '96px',
+          },
+        }}
+      />
+    )}
+  />
+
+  <IconButton 
+    color="primary" 
+    onClick={handleQuery}
+    disabled={loading || !query.trim()}
+    sx={{ mt: 1.5 }}
+  >
+    {loading ? <CircularProgress size={24} /> : <SendIcon />}
+  </IconButton>
+
+  <IconButton
+    color="primary"
+    onClick={(e) => setAnchorEl(e.currentTarget)}
+    sx={{ mt: 1.5 }}
+  >
+    <SaveIcon />
+  </IconButton>
+</Box>
+
 
         {/* Export Menu */}
         <Menu
@@ -426,19 +434,19 @@ function Chat() {
         {messages.some(m => m.type === 'results') && (
           <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
             <IconButton 
-              color={visualizationType === 'bar' ? 'primary' : 'default'}
+              color={visualizationType === 'bar' ? theme.palette.primary.main : 'default'}
               onClick={() => setVisualizationType('bar')}
             >
               <BarChartIcon />
             </IconButton>
             <IconButton 
-              color={visualizationType === 'pie' ? 'primary' : 'default'}
+              color={visualizationType === 'pie' ? theme.palette.primary.main : 'default'}
               onClick={() => setVisualizationType('pie')}
             >
               <PieChartIcon />
             </IconButton>
             <IconButton 
-              color={visualizationType === 'line' ? 'primary' : 'default'}
+              color={visualizationType === 'line' ? theme.palette.primary.main : 'default'}
               onClick={() => setVisualizationType('line')}
             >
               <LineChartIcon />
