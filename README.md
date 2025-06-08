@@ -114,7 +114,7 @@ A modern, production-ready GenAI SQL chatbot platform that enables users to quer
 
 ## Reflections
 
-See [REFLECTIONS.md](./REFLECTIONS.md) for a detailed write-up.
+See [REFLECTIONS.txt](./REFLECTIONS.txt) for a detailed write-up.
 
 **Summary:**
 - GenAI (GPT-4) can accurately translate natural language to SQL, especially when grounded with schema and context.
