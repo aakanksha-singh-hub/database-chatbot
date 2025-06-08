@@ -12,4 +12,5 @@ matplotlib==3.8.2
 seaborn==0.13.0
 numpy==1.26.2
 azure-identity==1.15.0
-azure-keyvault-secrets==4.7.0 
+azure-keyvault-secrets==4.7.0
+plotly==5.22.0 
