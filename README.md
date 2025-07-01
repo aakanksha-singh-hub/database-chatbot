@@ -2,6 +2,11 @@
 
 A modern, production-ready GenAI SQL chatbot platform that enables users to query structured databases using natural language. QueryBot removes the technical barrier of writing SQL and allows anyone to interact with data conversationally and securely.
 
+## 📽️ Demo Video
+
+[![Watch the demo](https://img.youtube.com/vi/wDKrFpUw_3s/0.jpg)](https://youtu.be/wDKrFpUw_3s)
+
+
 ---
 
 ## Features
